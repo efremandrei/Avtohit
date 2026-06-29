@@ -7,3 +7,4 @@ captures/
 *.iml
 *.apk
 *.aab
+!artifacts/*.apk

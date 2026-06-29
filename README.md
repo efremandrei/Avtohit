@@ -12,6 +12,14 @@ Command-line build, when Gradle is available:
 .\gradlew.bat :app:assembleDebug
 ```
 
+The repository also includes prebuilt debug APKs under `artifacts/`:
+
+- `AVTOHIT-arm64-v8a-debug.apk`
+- `AVTOHIT-armeabi-v7a-debug.apk`
+- `AVTOHIT-x86_64-debug.apk`
+
+These are split by CPU architecture so each APK stays below GitHub's 100 MB file limit.
+
 ## Media Contract
 
 - MP3 + picture: the picture is looped as the only video image, and the MP3 is copied into the MP4 as the soundtrack.
