@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.AVTOHIT" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@color/avtohit_background</item>
+        <item name="android:navigationBarColor">@color/avtohit_background</item>
+        <item name="android:colorAccent">@color/avtohit_accent</item>
+        <item name="android:windowBackground">@color/avtohit_background</item>
+    </style>
+</resources>

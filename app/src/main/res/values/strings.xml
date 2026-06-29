@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">AVTOHIT</string>
+    <string name="select_mp3">Select MP3</string>
+    <string name="select_visual">Select picture or video</string>
+    <string name="create_video">Create video</string>
+    <string name="mp3_not_selected">No MP3 selected</string>
+    <string name="visual_not_selected">No picture or video selected</string>
+    <string name="ready">Ready</string>
+    <string name="creating">Creating video&#8230;</string>
+    <string name="done_detail">Video saved (%1$s, %2$s)</string>
+    <string name="failed_detail">Failed: %1$s</string>
+    <string name="mode_picture">picture</string>
+    <string name="mode_video">video</string>
+    <string name="mp3_copied">MP3 copied</string>
+    <string name="video_reencoded_mp3_copied">video re-encoded, MP3 copied</string>
+</resources>
