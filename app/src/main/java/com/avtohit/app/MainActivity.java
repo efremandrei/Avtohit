@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
+import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
@@ -82,7 +83,6 @@ public final class MainActivity extends Activity {
     private Button exportButton;
     private Button selectVisualButton;
     private Button selectAudioButton;
-    private Button newProjectButton;
     private Button settingsButton;
     private ProgressBar progress;
     private LinearLayout audioWaveform;
@@ -110,6 +110,7 @@ public final class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         bindViews();
+        applyTopInset();
         bindActions();
         refreshUi();
     }
@@ -176,7 +177,6 @@ public final class MainActivity extends Activity {
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
         selectAudioButton = findViewById(R.id.selectAudioButton);
-        newProjectButton = findViewById(R.id.newProjectButton);
         settingsButton = findViewById(R.id.settingsButton);
         progress = findViewById(R.id.progress);
         audioWaveform = findViewById(R.id.audioWaveform);
@@ -191,7 +191,6 @@ public final class MainActivity extends Activity {
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         settingsButton.setOnClickListener(view -> showExportDialog(false));
         exportButton.setOnClickListener(view -> showExportDialog(true));
-        newProjectButton.setOnClickListener(view -> clearProject());
         playButton.setOnClickListener(view -> togglePreviewPlayback());
 
         previewSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -355,8 +354,8 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshTimeline() {
-        int clipWidth = calculateClipWidth();
-        int laneWidth = Math.max(clipWidth + dp(16), dp(320));
+        int laneWidth = Math.max(0, getResources().getDisplayMetrics().widthPixels - dp(32) - dp(36));
+        int clipWidth = calculateClipWidth(laneWidth);
         setViewWidth(visualTrackLane, laneWidth);
         setViewWidth(audioTrackLane, laneWidth);
         setViewWidth(visualTrackClip, clipWidth);
@@ -389,7 +388,6 @@ public final class MainActivity extends Activity {
         boolean readyToExport = !rendering && audioUri != null && visualUri != null;
         selectVisualButton.setEnabled(!rendering);
         selectAudioButton.setEnabled(!rendering);
-        newProjectButton.setEnabled(!rendering);
         settingsButton.setEnabled(!rendering);
         exportButton.setEnabled(readyToExport);
         playButton.setEnabled(!rendering && audioUri != null);
@@ -514,21 +512,6 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void clearProject() {
-        releasePreviewPlayer();
-        audioUri = null;
-        visualUri = null;
-        visualMimeType = null;
-        audioDisplayName = null;
-        visualDisplayName = null;
-        visualIsVideo = false;
-        audioDurationMs = 0L;
-        visualDurationMs = 0L;
-        customProjectTitle = null;
-        status.setText(R.string.project_cleared);
-        refreshUi();
-    }
-
     private void applyExportSelection(View dialogView) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
@@ -619,13 +602,14 @@ public final class MainActivity extends Activity {
         return source.startsWith("video/") || source.endsWith(".mp4") || source.endsWith(".mov") || source.endsWith(".m4v") || source.endsWith(".webm");
     }
 
-    private int calculateClipWidth() {
+    private int calculateClipWidth(int laneWidth) {
+        int minimum = Math.max(dp(140), laneWidth / 2);
         if (audioDurationMs <= 0L) {
-            return dp(220);
+            return minimum;
         }
         long seconds = Math.max(1L, audioDurationMs / 1000L);
-        int scaled = dp(220) + (int) Math.min(dp(540), seconds * dp(12));
-        return Math.max(dp(220), scaled);
+        int scaled = minimum + (int) Math.min(laneWidth / 2, seconds * dp(4));
+        return Math.min(laneWidth, Math.max(minimum, scaled));
     }
 
     private void populateWaveform(LinearLayout container, int widthPx) {
@@ -704,7 +688,10 @@ public final class MainActivity extends Activity {
         view.setLayoutParams(params);
     }
 
-    private static String defaultOutputName() {
+    private String defaultOutputName() {
+        if (audioDisplayName != null && !audioDisplayName.trim().isEmpty()) {
+            return stripExtension(audioDisplayName) + ".mp4";
+        }
         String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
         return "AVTOHIT-" + timestamp + ".mp4";
     }
@@ -737,5 +724,33 @@ public final class MainActivity extends Activity {
             return value;
         }
         return value.substring(0, Math.max(0, max - 1)).trim() + "...";
+    }
+
+    private void applyTopInset() {
+        final View content = ((View) findViewById(android.R.id.content)).getRootView();
+        content.setOnApplyWindowInsetsListener((view, insets) -> {
+            int topInset = 0;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                topInset = insets.getInsets(WindowInsets.Type.statusBars()).top;
+            } else {
+                topInset = insets.getSystemWindowInsetTop();
+            }
+            view.setPadding(
+                    view.getPaddingLeft(),
+                    topInset,
+                    view.getPaddingRight(),
+                    view.getPaddingBottom()
+            );
+            return insets;
+        });
+        content.requestApplyInsets();
+    }
+
+    private static String stripExtension(String name) {
+        int dot = name.lastIndexOf('.');
+        if (dot <= 0) {
+            return name;
+        }
+        return name.substring(0, dot);
     }
 }
