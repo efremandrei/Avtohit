@@ -55,19 +55,68 @@
                     android:textSize="13sp" />
             </LinearLayout>
 
-            <Button
-                android:id="@+id/exportButton"
+            <LinearLayout
                 android:layout_width="wrap_content"
-                android:layout_height="46dp"
-                android:background="@drawable/bg_export_button"
-                android:enabled="false"
-                android:minWidth="0dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:text="@string/export_button"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/settingsButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/bg_icon_button"
+                    android:contentDescription="@string/open_settings"
+                    android:padding="10dp"
+                    android:src="@android:drawable/ic_menu_manage"
+                    android:tint="@color/icon_button_tint" />
+
+                <Button
+                    android:id="@+id/exportButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="46dp"
+                    android:background="@drawable/bg_export_button"
+                    android:enabled="false"
+                    android:minWidth="0dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:text="@string/export_button"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="15sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/selectAudioButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_selectable_action_button"
+                android:text="@string/select_mp3"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
-                android:textSize="15sp" />
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/selectVisualButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_selectable_action_button"
+                android:text="@string/select_visual"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -273,49 +322,6 @@
                         android:textColor="@color/avtohit_muted"
                         android:textSize="13sp" />
             </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/selectVisualButton"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tonal_button"
-                android:text="@string/select_visual"
-                android:textAllCaps="false"
-                android:textColor="@color/avtohit_text"
-                android:textSize="13sp" />
-
-            <Button
-                android:id="@+id/selectAudioButton"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tonal_button"
-                android:text="@string/select_mp3"
-                android:textAllCaps="false"
-                android:textColor="@color/avtohit_text"
-                android:textSize="13sp" />
-
-            <Button
-                android:id="@+id/settingsButton"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_primary_button"
-                android:text="@string/open_settings"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="13sp" />
         </LinearLayout>
 
         <LinearLayout

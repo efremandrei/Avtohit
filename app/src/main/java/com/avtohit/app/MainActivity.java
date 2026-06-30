@@ -83,7 +83,7 @@ public final class MainActivity extends Activity {
     private Button exportButton;
     private Button selectVisualButton;
     private Button selectAudioButton;
-    private Button settingsButton;
+    private ImageButton settingsButton;
     private ProgressBar progress;
     private LinearLayout audioWaveform;
     private View visualTrackLane;
@@ -388,6 +388,8 @@ public final class MainActivity extends Activity {
         boolean readyToExport = !rendering && audioUri != null && visualUri != null;
         selectVisualButton.setEnabled(!rendering);
         selectAudioButton.setEnabled(!rendering);
+        selectVisualButton.setSelected(visualUri != null);
+        selectAudioButton.setSelected(audioUri != null);
         settingsButton.setEnabled(!rendering);
         exportButton.setEnabled(readyToExport);
         playButton.setEnabled(!rendering && audioUri != null);
@@ -668,7 +670,7 @@ public final class MainActivity extends Activity {
             return customProjectTitle;
         }
         if (audioDisplayName != null) {
-            return ellipsize(audioDisplayName.replace(".mp3", ""), 26);
+            return ellipsize(stripExtension(audioDisplayName), 26);
         }
         return getString(R.string.project_title_default);
     }
