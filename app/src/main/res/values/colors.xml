@@ -1,8 +1,15 @@
 <resources>
     <color name="avtohit_background">#F7F8F5</color>
     <color name="avtohit_surface">#FFFFFF</color>
+    <color name="avtohit_surface_alt">#EEF3EF</color>
+    <color name="avtohit_surface_raised">#FCFCFA</color>
     <color name="avtohit_text">#151817</color>
     <color name="avtohit_muted">#5D6662</color>
+    <color name="avtohit_border">#D5DDD8</color>
     <color name="avtohit_primary">#12664F</color>
+    <color name="avtohit_primary_soft">#DCEDE7</color>
     <color name="avtohit_accent">#C75D2C</color>
+    <color name="avtohit_accent_soft">#F6E2D8</color>
+    <color name="avtohit_timeline_dark">#24362F</color>
+    <color name="avtohit_overlay">#8C0F1412</color>
 </resources>

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="12dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/export_resolution_title"
+            android:textColor="@color/avtohit_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/resolutionGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/resolution720"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_resolution_720" />
+
+            <RadioButton
+                android:id="@+id/resolution1080"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_resolution_1080" />
+
+            <RadioButton
+                android:id="@+id/resolution4k"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_resolution_4k" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/export_fps_title"
+            android:textColor="@color/avtohit_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/fpsGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/fps30"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_fps_30" />
+
+            <RadioButton
+                android:id="@+id/fps60"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/export_fps_60" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/exportSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_chip_neutral"
+            android:padding="12dp"
+            android:textColor="@color/avtohit_text"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>

@@ -29,18 +29,18 @@ public final class AvtohitProcessor {
 
     public static final class Result {
         public final VisualKind visualKind;
-        public final boolean usedVideoFallback;
+        public final boolean videoReencoded;
         public final long outputBytes;
         public final String ffmpegOutput;
 
         private Result(
                 VisualKind visualKind,
-                boolean usedVideoFallback,
+                boolean videoReencoded,
                 long outputBytes,
                 String ffmpegOutput
         ) {
             this.visualKind = visualKind;
-            this.usedVideoFallback = usedVideoFallback;
+            this.videoReencoded = videoReencoded;
             this.outputBytes = outputBytes;
             this.ffmpegOutput = ffmpegOutput;
         }
@@ -51,7 +51,9 @@ public final class AvtohitProcessor {
             Uri audioUri,
             Uri visualUri,
             String visualMimeType,
-            Uri destinationUri
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate
     ) throws IOException, AvtohitException {
         ContentResolver resolver = context.getContentResolver();
         File workDir = new File(context.getCacheDir(), "avtohit");
@@ -70,17 +72,12 @@ public final class AvtohitProcessor {
 
             VisualKind visualKind = detectVisualKind(resolver, visualUri, visualMimeType);
             FFmpegSession session;
-            boolean fallback = false;
+            boolean videoReencoded = visualKind == VisualKind.VIDEO;
 
             if (visualKind == VisualKind.IMAGE) {
-                session = execute(buildImageCommand(audioFile, visualFile, outputFile));
+                session = execute(buildImageCommand(audioFile, visualFile, outputFile, exportProfile, frameRate));
             } else {
-                session = execute(buildVideoCopyCommand(audioFile, visualFile, outputFile));
-                if (!ReturnCode.isSuccess(session.getReturnCode())) {
-                    deleteIfExists(outputFile);
-                    fallback = true;
-                    session = execute(buildVideoReencodeCommand(audioFile, visualFile, outputFile));
-                }
+                session = execute(buildVideoCommand(audioFile, visualFile, outputFile, exportProfile, frameRate));
             }
 
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
@@ -88,7 +85,7 @@ public final class AvtohitProcessor {
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
-            return new Result(visualKind, fallback, outputFile.length(), session.getOutput());
+            return new Result(visualKind, videoReencoded, outputFile.length(), session.getOutput());
         } finally {
             deleteIfExists(audioFile);
             deleteIfExists(visualFile);
@@ -119,12 +116,18 @@ public final class AvtohitProcessor {
         return FFmpegKit.executeWithArguments(arguments.toArray(new String[0]));
     }
 
-    private static List<String> buildImageCommand(File audioFile, File imageFile, File outputFile) {
+    private static List<String> buildImageCommand(
+            File audioFile,
+            File imageFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate
+    ) {
         List<String> args = baseArgs();
         args.add("-loop");
         args.add("1");
         args.add("-framerate");
-        args.add("30");
+        args.add(String.valueOf(frameRate));
         args.add("-i");
         args.add(imageFile.getAbsolutePath());
         args.add("-i");
@@ -134,7 +137,7 @@ public final class AvtohitProcessor {
         args.add("-map");
         args.add("1:a:0");
         args.add("-vf");
-        args.add("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
         args.add("-c:v");
         args.add("mpeg4");
         args.add("-q:v");
@@ -148,30 +151,13 @@ public final class AvtohitProcessor {
         return args;
     }
 
-    private static List<String> buildVideoCopyCommand(File audioFile, File videoFile, File outputFile) {
-        List<String> args = baseArgs();
-        args.add("-stream_loop");
-        args.add("-1");
-        args.add("-i");
-        args.add(videoFile.getAbsolutePath());
-        args.add("-i");
-        args.add(audioFile.getAbsolutePath());
-        args.add("-map");
-        args.add("0:v:0");
-        args.add("-map");
-        args.add("1:a:0");
-        args.add("-c:v");
-        args.add("copy");
-        args.add("-c:a");
-        args.add("copy");
-        args.add("-shortest");
-        args.add("-movflags");
-        args.add("+faststart");
-        args.add(outputFile.getAbsolutePath());
-        return args;
-    }
-
-    private static List<String> buildVideoReencodeCommand(File audioFile, File videoFile, File outputFile) {
+    private static List<String> buildVideoCommand(
+            File audioFile,
+            File videoFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate
+    ) {
         List<String> args = baseArgs();
         args.add("-fflags");
         args.add("+genpts");
@@ -186,7 +172,7 @@ public final class AvtohitProcessor {
         args.add("-map");
         args.add("1:a:0");
         args.add("-vf");
-        args.add("scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,format=yuv420p");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
         args.add("-c:v");
         args.add("mpeg4");
         args.add("-q:v");
@@ -205,6 +191,13 @@ public final class AvtohitProcessor {
         args.add("-hide_banner");
         args.add("-y");
         return args;
+    }
+
+    private static String buildScalePadFilter(ExportProfile exportProfile, int frameRate) {
+        return "fps=" + frameRate
+                + ",scale=" + exportProfile.width + ":" + exportProfile.height
+                + ":force_original_aspect_ratio=decrease,pad="
+                + exportProfile.width + ":" + exportProfile.height + ":(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p";
     }
 
     private static VisualKind detectVisualKind(ContentResolver resolver, Uri uri, String givenMime) throws AvtohitException {
@@ -270,7 +263,7 @@ public final class AvtohitProcessor {
     }
 
     private static void copyFileToUri(ContentResolver resolver, File sourceFile, Uri destinationUri) throws IOException {
-        OutputStream output = resolver.openOutputStream(destinationUri, "wt");
+        OutputStream output = resolver.openOutputStream(destinationUri, "w");
         if (output == null) {
             throw new IOException("Could not open selected output destination.");
         }
