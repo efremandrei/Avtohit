@@ -117,11 +117,9 @@ public final class MainActivity extends Activity {
     private Button exportButton;
     private Button selectVisualButton;
     private Button selectAudioButton;
-    private ImageButton settingsButton;
     private ProgressBar progress;
     private LinearLayout rootContainer;
     private View statusBarSpacer;
-    private View topBar;
     private View projectSummaryCard;
     private View previewCard;
 
@@ -208,11 +206,9 @@ public final class MainActivity extends Activity {
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
         selectAudioButton = findViewById(R.id.selectAudioButton);
-        settingsButton = findViewById(R.id.settingsButton);
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
-        topBar = findViewById(R.id.topBar);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         previewCard = findViewById(R.id.previewCard);
     }
@@ -220,7 +216,6 @@ public final class MainActivity extends Activity {
     private void bindActions() {
         selectVisualButton.setOnClickListener(view -> openVisualPicker());
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
-        settingsButton.setOnClickListener(view -> showExportDialog(false));
         exportButton.setOnClickListener(view -> showExportDialog(true));
         playButton.setOnClickListener(view -> togglePreviewPlayback());
 
@@ -377,13 +372,12 @@ public final class MainActivity extends Activity {
     }
 
     private void updateActions() {
-        boolean readyToExport = !rendering && audioUri != null && visualUri != null;
+        boolean canOpenMergeMenu = !rendering;
         selectVisualButton.setEnabled(!rendering);
         selectAudioButton.setEnabled(!rendering);
         selectVisualButton.setSelected(visualUri != null);
         selectAudioButton.setSelected(audioUri != null);
-        settingsButton.setEnabled(!rendering);
-        exportButton.setEnabled(readyToExport);
+        exportButton.setEnabled(canOpenMergeMenu);
         playButton.setEnabled(!rendering && audioUri != null);
         previewSeek.setEnabled(!rendering && audioUri != null);
         progress.setVisibility(rendering ? View.VISIBLE : View.GONE);
@@ -438,7 +432,11 @@ public final class MainActivity extends Activity {
                     applyExportSelection(dialogView);
                     refreshUi();
                     if (startExportWhenSaved) {
-                        openOutputPicker();
+                        if (audioUri == null || visualUri == null) {
+                            status.setText(R.string.select_media_before_export);
+                        } else {
+                            openOutputPicker();
+                        }
                     } else {
                         status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
                     }
@@ -746,7 +744,6 @@ public final class MainActivity extends Activity {
         View content = findViewById(android.R.id.content);
         content.setBackgroundColor(currentSkin.backgroundColor);
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
-        topBar.setBackgroundColor(currentSkin.backgroundColor);
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
@@ -754,7 +751,6 @@ public final class MainActivity extends Activity {
         projectMode.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
 
-        styleTopBarIconButton(settingsButton);
         updateSystemBars();
     }
 
@@ -789,16 +785,6 @@ public final class MainActivity extends Activity {
             int flags = decorView.getSystemUiVisibility();
             decorView.setSystemUiVisibility(flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
-    }
-
-    private void styleTopBarIconButton(ImageButton button) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(currentSkin.surfaceColor);
-        drawable.setCornerRadius(dp(14));
-        drawable.setStroke(dp(1), currentSkin.borderColor);
-        button.setBackground(drawable);
-        button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
-        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
     private void styleSettingsDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
