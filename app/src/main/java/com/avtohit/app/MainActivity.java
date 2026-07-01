@@ -877,7 +877,7 @@ public final class MainActivity extends Activity {
         View content = findViewById(android.R.id.content);
         content.setBackgroundColor(currentSkin.backgroundColor);
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
-        topBar.setBackgroundColor(Color.BLACK);
+        topBar.setBackgroundColor(currentSkin.backgroundColor);
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(timelineCard, currentSkin.surfaceColor);
@@ -886,8 +886,8 @@ public final class MainActivity extends Activity {
         styleSurface(audioTrackLane, currentSkin.surfaceAltColor, 18);
         styleSurface(musicTrackPlaceholder, currentSkin.surfaceAltColor, 16);
 
-        projectTitle.setTextColor(Color.WHITE);
-        projectSubtitle.setTextColor(0xFFA7A7A7);
+        projectTitle.setTextColor(currentSkin.textColor);
+        projectSubtitle.setTextColor(currentSkin.mutedColor);
         projectMode.setTextColor(currentSkin.textColor);
         timelineTitle.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
@@ -939,11 +939,11 @@ public final class MainActivity extends Activity {
 
     private void styleTopBarIconButton(ImageButton button) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(0xFF1E1E1E);
+        drawable.setColor(currentSkin.surfaceColor);
         drawable.setCornerRadius(dp(14));
-        drawable.setStroke(dp(1), 0xFF343434);
+        drawable.setStroke(dp(1), currentSkin.borderColor);
         button.setBackground(drawable);
-        button.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+        button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
         button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
