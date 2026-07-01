@@ -16,7 +16,7 @@
     <string name="summary_visual">Visual</string>
     <string name="summary_audio">Audio</string>
     <string name="summary_export">Export</string>
-    <string name="export_button">Export</string>
+    <string name="export_button">Merge To Video</string>
     <string name="back_button">Back</string>
     <string name="play_button">Play preview audio</string>
     <string name="pause_button">Pause preview audio</string>
