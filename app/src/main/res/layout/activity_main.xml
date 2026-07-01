@@ -15,10 +15,13 @@
         android:paddingBottom="16dp">
 
         <LinearLayout
+            android:id="@+id/topBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@android:color/black"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:padding="12dp">
 
             <ImageButton
                 android:id="@+id/backButton"
@@ -42,7 +45,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/project_title_default"
-                    android:textColor="@color/avtohit_text"
+                    android:textColor="@android:color/white"
                     android:textSize="24sp"
                     android:textStyle="bold" />
 
@@ -52,7 +55,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:text="@string/project_subtitle_default"
-                    android:textColor="@color/avtohit_muted"
+                    android:textColor="#A7A7A7"
                     android:textSize="13sp" />
             </LinearLayout>
 

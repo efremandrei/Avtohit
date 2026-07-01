@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.MediaMetadataRetriever;
@@ -133,6 +134,7 @@ public final class MainActivity extends Activity {
     private ProgressBar progress;
     private LinearLayout rootContainer;
     private LinearLayout audioWaveform;
+    private View topBar;
     private View projectSummaryCard;
     private View timelineCard;
     private View previewCard;
@@ -240,6 +242,7 @@ public final class MainActivity extends Activity {
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
         audioWaveform = findViewById(R.id.audioWaveform);
+        topBar = findViewById(R.id.topBar);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         timelineCard = findViewById(R.id.timelineCard);
         previewCard = findViewById(R.id.previewCard);
@@ -490,16 +493,22 @@ public final class MainActivity extends Activity {
         fpsGroup.setOnCheckedChangeListener(listener);
         skinGroup.setOnCheckedChangeListener(listener);
 
-        new AlertDialog.Builder(this)
-                .setTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title)
+        TextView dialogTitle = new TextView(this);
+        dialogTitle.setPadding(dp(24), dp(20), dp(24), dp(8));
+        dialogTitle.setText(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
+        dialogTitle.setTextSize(20f);
+        dialogTitle.setTypeface(dialogTitle.getTypeface(), android.graphics.Typeface.BOLD);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
                 .setView(dialogView)
                 .setNegativeButton(R.string.export_cancel, null)
-                .setNeutralButton(R.string.export_apply, (dialog, which) -> {
+                .setNeutralButton(R.string.export_apply, (dialogInterface, which) -> {
                     applyExportSelection(dialogView);
                     status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
                     refreshUi();
                 })
-                .setPositiveButton(startExportWhenSaved ? R.string.export_start : R.string.export_apply, (dialog, which) -> {
+                .setPositiveButton(startExportWhenSaved ? R.string.export_start : R.string.export_apply, (dialogInterface, which) -> {
                     applyExportSelection(dialogView);
                     refreshUi();
                     if (startExportWhenSaved) {
@@ -508,7 +517,9 @@ public final class MainActivity extends Activity {
                         status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
                     }
                 })
-                .show();
+                .create();
+        dialog.setOnShowListener(unused -> styleSettingsDialog(dialog, dialogTitle, dialogView));
+        dialog.show();
     }
 
     private void showRenameDialog() {
@@ -866,6 +877,7 @@ public final class MainActivity extends Activity {
         View content = findViewById(android.R.id.content);
         content.setBackgroundColor(currentSkin.backgroundColor);
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
+        topBar.setBackgroundColor(Color.BLACK);
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(timelineCard, currentSkin.surfaceColor);
@@ -874,8 +886,8 @@ public final class MainActivity extends Activity {
         styleSurface(audioTrackLane, currentSkin.surfaceAltColor, 18);
         styleSurface(musicTrackPlaceholder, currentSkin.surfaceAltColor, 16);
 
-        projectTitle.setTextColor(currentSkin.textColor);
-        projectSubtitle.setTextColor(currentSkin.mutedColor);
+        projectTitle.setTextColor(Color.WHITE);
+        projectSubtitle.setTextColor(0xFFA7A7A7);
         projectMode.setTextColor(currentSkin.textColor);
         timelineTitle.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
@@ -887,8 +899,8 @@ public final class MainActivity extends Activity {
         audioTrackMeta.setTextColor(currentSkin.mutedColor);
         musicTrackPlaceholder.setTextColor(currentSkin.mutedColor);
 
-        backButton.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
-        settingsButton.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
+        styleTopBarIconButton(backButton);
+        styleTopBarIconButton(settingsButton);
         updateSystemBars();
     }
 
@@ -909,22 +921,78 @@ public final class MainActivity extends Activity {
     }
 
     private void updateSystemBars() {
-        getWindow().setStatusBarColor(currentSkin.backgroundColor);
+        getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(currentSkin.backgroundColor);
         View decorView = getWindow().getDecorView();
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             if (getWindow().getInsetsController() != null) {
                 getWindow().getInsetsController().setSystemBarsAppearance(
-                        currentSkin.lightStatusBar ? android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS : 0,
+                        0,
                         android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                 );
             }
         } else if (android.os.Build.VERSION.SDK_INT >= 23) {
             int flags = decorView.getSystemUiVisibility();
-            if (currentSkin.lightStatusBar) {
-                decorView.setSystemUiVisibility(flags | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-            } else {
-                decorView.setSystemUiVisibility(flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            decorView.setSystemUiVisibility(flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        }
+    }
+
+    private void styleTopBarIconButton(ImageButton button) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(0xFF1E1E1E);
+        drawable.setCornerRadius(dp(14));
+        drawable.setStroke(dp(1), 0xFF343434);
+        button.setBackground(drawable);
+        button.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
+    }
+
+    private void styleSettingsDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
+        boolean darkDialog = currentSkin == AppSkin.NIGHT;
+        int surfaceColor = darkDialog ? currentSkin.surfaceColor : Color.WHITE;
+        int summaryColor = darkDialog ? currentSkin.surfaceAltColor : 0xFFF4F6F4;
+        int textColor = darkDialog ? currentSkin.textColor : 0xFF151817;
+        int mutedColor = darkDialog ? currentSkin.mutedColor : 0xFF5D6662;
+        int borderColor = darkDialog ? currentSkin.borderColor : 0xFFD5DDD8;
+
+        if (dialog.getWindow() != null) {
+            GradientDrawable windowDrawable = new GradientDrawable();
+            windowDrawable.setColor(surfaceColor);
+            windowDrawable.setCornerRadius(dp(24));
+            dialog.getWindow().setBackgroundDrawable(windowDrawable);
+        }
+
+        dialogTitle.setBackgroundColor(surfaceColor);
+        dialogTitle.setTextColor(textColor);
+
+        View content = dialogView.findViewById(R.id.exportDialogContent);
+        content.setBackgroundColor(surfaceColor);
+        styleTextInputs(dialogView, textColor, mutedColor);
+
+        View exportSummary = dialogView.findViewById(R.id.exportSummary);
+        GradientDrawable summaryDrawable = new GradientDrawable();
+        summaryDrawable.setColor(summaryColor);
+        summaryDrawable.setCornerRadius(dp(16));
+        summaryDrawable.setStroke(dp(1), borderColor);
+        exportSummary.setBackground(summaryDrawable);
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void styleTextInputs(View root, int textColor, int mutedColor) {
+        if (root instanceof TextView) {
+            TextView textView = (TextView) root;
+            textView.setTextColor(textColor);
+            if (root instanceof android.widget.RadioButton) {
+                ((android.widget.RadioButton) root).setButtonTintList(ColorStateList.valueOf(0xFF2E7D32));
+            }
+        }
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                styleTextInputs(group.getChildAt(i), textColor, mutedColor);
             }
         }
     }
