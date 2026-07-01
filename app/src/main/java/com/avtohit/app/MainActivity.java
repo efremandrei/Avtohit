@@ -112,16 +112,6 @@ public final class MainActivity extends Activity {
     private TextView previewModeLabel;
     private TextView previewTime;
     private TextView status;
-    private TextView timelineHint;
-    private TextView visualTrackClip;
-    private TextView visualTrackMeta;
-    private TextView audioTrackClip;
-    private TextView audioTrackMeta;
-    private TextView musicTrackPlaceholder;
-    private TextView timelineTitle;
-    private TextView trackVisualLabel;
-    private TextView trackVoiceLabel;
-    private TextView trackMusicLabel;
     private TextView previewTitle;
     private ImageView previewArtwork;
     private ImageButton backButton;
@@ -133,14 +123,10 @@ public final class MainActivity extends Activity {
     private ImageButton settingsButton;
     private ProgressBar progress;
     private LinearLayout rootContainer;
-    private LinearLayout audioWaveform;
     private View statusBarSpacer;
     private View topBar;
     private View projectSummaryCard;
-    private View timelineCard;
     private View previewCard;
-    private View visualTrackLane;
-    private View audioTrackLane;
 
     private Uri audioUri;
     private Uri visualUri;
@@ -222,16 +208,6 @@ public final class MainActivity extends Activity {
         previewModeLabel = findViewById(R.id.previewModeLabel);
         previewTime = findViewById(R.id.previewTime);
         status = findViewById(R.id.status);
-        timelineHint = findViewById(R.id.timelineHint);
-        visualTrackClip = findViewById(R.id.visualTrackClip);
-        visualTrackMeta = findViewById(R.id.visualTrackMeta);
-        audioTrackClip = findViewById(R.id.audioTrackClip);
-        audioTrackMeta = findViewById(R.id.audioTrackMeta);
-        musicTrackPlaceholder = findViewById(R.id.musicTrackPlaceholder);
-        timelineTitle = findViewById(R.id.timelineTitle);
-        trackVisualLabel = findViewById(R.id.trackVisualLabel);
-        trackVoiceLabel = findViewById(R.id.trackVoiceLabel);
-        trackMusicLabel = findViewById(R.id.trackMusicLabel);
         previewTitle = findViewById(R.id.previewTitle);
         playButton = findViewById(R.id.playButton);
         previewSeek = findViewById(R.id.previewSeek);
@@ -242,14 +218,10 @@ public final class MainActivity extends Activity {
         settingsButton = findViewById(R.id.settingsButton);
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
-        audioWaveform = findViewById(R.id.audioWaveform);
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
         topBar = findViewById(R.id.topBar);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
-        timelineCard = findViewById(R.id.timelineCard);
         previewCard = findViewById(R.id.previewCard);
-        visualTrackLane = findViewById(R.id.visualTrackLane);
-        audioTrackLane = findViewById(R.id.audioTrackLane);
     }
 
     private void bindActions() {
@@ -314,12 +286,14 @@ public final class MainActivity extends Activity {
         setRendering(true);
         releasePreviewPlayer();
         status.setText(R.string.creating);
+        progress.setProgress(0);
 
         Uri selectedAudio = audioUri;
         Uri selectedVisual = visualUri;
         String selectedVisualMime = visualMimeType;
         ExportProfile selectedProfile = exportProfile;
         int selectedFrameRate = frameRate;
+        long selectedAudioDurationMs = audioDurationMs;
 
         executor.submit(() -> {
             try {
@@ -330,7 +304,9 @@ public final class MainActivity extends Activity {
                         selectedVisualMime,
                         destinationUri,
                         selectedProfile,
-                        selectedFrameRate
+                        selectedFrameRate,
+                        selectedAudioDurationMs,
+                        (currentMs, totalMs) -> mainHandler.post(() -> updateRenderProgress(currentMs, totalMs))
                 );
                 mainHandler.post(() -> onRenderSuccess(result));
             } catch (IOException | AvtohitException | RuntimeException error) {
@@ -359,7 +335,6 @@ public final class MainActivity extends Activity {
     private void refreshUi() {
         refreshProjectHeader();
         refreshPreview();
-        refreshTimeline();
         updateActions();
     }
 
@@ -414,42 +389,6 @@ public final class MainActivity extends Activity {
             updatePreviewTime(0, audioDurationMs);
         }
 
-        if (audioUri == null) {
-            audioTrackMeta.setText(R.string.no_audio_preview);
-        } else {
-            audioTrackMeta.setText(getString(R.string.audio_meta, formatDuration(audioDurationMs)));
-        }
-    }
-
-    private void refreshTimeline() {
-        int laneWidth = Math.max(0, getResources().getDisplayMetrics().widthPixels - dp(32) - dp(36));
-        int clipWidth = calculateClipWidth(laneWidth);
-        setViewWidth(visualTrackLane, laneWidth);
-        setViewWidth(audioTrackLane, laneWidth);
-        setViewWidth(visualTrackClip, clipWidth);
-        setViewWidth(audioWaveform, clipWidth);
-        setViewWidth(musicTrackPlaceholder, laneWidth);
-
-        if (visualUri == null) {
-            visualTrackClip.setText(R.string.visual_track_default);
-            visualTrackMeta.setText(R.string.no_visual_preview);
-        } else {
-            visualTrackClip.setText(getString(R.string.visual_track_clip, ellipsize(visualDisplayName, 28)));
-            visualTrackMeta.setText(visualIsVideo ? R.string.visual_video_meta : R.string.visual_image_meta);
-        }
-
-        if (audioUri == null) {
-            audioTrackClip.setText(R.string.audio_track_default);
-            audioTrackMeta.setText(R.string.no_audio_preview);
-        } else {
-            audioTrackClip.setText(getString(R.string.audio_track_clip, ellipsize(audioDisplayName, 30)));
-            audioTrackMeta.setText(getString(R.string.audio_meta, formatDuration(audioDurationMs)));
-        }
-
-        populateWaveform(audioWaveform, clipWidth);
-        timelineHint.setText(audioUri == null
-                ? getString(R.string.timeline_hint)
-                : "Timeline scaled to " + formatDuration(audioDurationMs) + " of audio.");
     }
 
     private void updateActions() {
@@ -711,38 +650,17 @@ public final class MainActivity extends Activity {
         return source.startsWith("video/") || source.endsWith(".mp4") || source.endsWith(".mov") || source.endsWith(".m4v") || source.endsWith(".webm");
     }
 
-    private int calculateClipWidth(int laneWidth) {
-        int minimum = Math.max(dp(140), laneWidth / 2);
-        if (audioDurationMs <= 0L) {
-            return minimum;
-        }
-        long seconds = Math.max(1L, audioDurationMs / 1000L);
-        int scaled = minimum + (int) Math.min(laneWidth / 2, seconds * dp(4));
-        return Math.min(laneWidth, Math.max(minimum, scaled));
-    }
-
-    private void populateWaveform(LinearLayout container, int widthPx) {
-        container.removeAllViews();
-        int barCount = Math.max(18, widthPx / dp(8));
-        int seed = audioDisplayName != null ? audioDisplayName.hashCode() : 7;
-        for (int i = 0; i < barCount; i++) {
-            View bar = new View(this);
-            int height = dp(12) + Math.abs(seed + (i * 37)) % dp(26);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(4), height);
-            params.rightMargin = dp(2);
-            params.topMargin = dp(6);
-            params.bottomMargin = dp(6);
-            bar.setLayoutParams(params);
-            GradientDrawable drawable = new GradientDrawable();
-            drawable.setColor(0xCCFFFFFF);
-            drawable.setCornerRadius(dp(2));
-            bar.setBackground(drawable);
-            container.addView(bar);
-        }
-    }
-
     private void updatePreviewTime(long currentMs, long totalMs) {
         previewTime.setText(getString(R.string.time_pair, formatDuration(currentMs), formatDuration(totalMs)));
+    }
+
+    private void updateRenderProgress(long currentMs, long totalMs) {
+        if (totalMs <= 0L) {
+            return;
+        }
+        int scaled = (int) Math.min(1000L, Math.max(0L, (currentMs * 1000L) / totalMs));
+        progress.setProgress(scaled);
+        status.setText("Merging " + Math.min(100, Math.max(0, scaled / 10)) + "%");
     }
 
     private void setRendering(boolean rendering) {
@@ -879,24 +797,12 @@ public final class MainActivity extends Activity {
         topBar.setBackgroundColor(currentSkin.backgroundColor);
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
-        styleCard(timelineCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
-        styleSurface(visualTrackLane, currentSkin.surfaceAltColor, 18);
-        styleSurface(audioTrackLane, currentSkin.surfaceAltColor, 18);
-        styleSurface(musicTrackPlaceholder, currentSkin.surfaceAltColor, 16);
 
         projectTitle.setTextColor(currentSkin.textColor);
         projectSubtitle.setTextColor(currentSkin.mutedColor);
         projectMode.setTextColor(currentSkin.textColor);
-        timelineTitle.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
-        trackVisualLabel.setTextColor(currentSkin.textColor);
-        trackVoiceLabel.setTextColor(currentSkin.textColor);
-        trackMusicLabel.setTextColor(currentSkin.textColor);
-        timelineHint.setTextColor(currentSkin.mutedColor);
-        visualTrackMeta.setTextColor(currentSkin.mutedColor);
-        audioTrackMeta.setTextColor(currentSkin.mutedColor);
-        musicTrackPlaceholder.setTextColor(currentSkin.mutedColor);
 
         styleTopBarIconButton(backButton);
         styleTopBarIconButton(settingsButton);

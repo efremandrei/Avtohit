@@ -210,155 +210,6 @@
             </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/timelineCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:background="@drawable/bg_surface_card"
-                android:elevation="2dp"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-            <TextView
-                android:id="@+id/timelineTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/timeline_title"
-                android:textColor="@color/avtohit_text"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/timelineHint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/timeline_hint"
-                android:textColor="@color/avtohit_muted"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:id="@+id/timelineCanvas"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/trackVisualLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/track_visual"
-                        android:textColor="@color/avtohit_text"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <FrameLayout
-                        android:id="@+id/visualTrackLane"
-                        android:layout_width="match_parent"
-                        android:layout_height="56dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/bg_timeline_lane"
-                        android:padding="8dp">
-
-                        <TextView
-                            android:id="@+id/visualTrackClip"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="@drawable/bg_track_visual"
-                            android:gravity="center_vertical"
-                            android:paddingStart="14dp"
-                            android:paddingEnd="14dp"
-                            android:text="@string/visual_track_default"
-                            android:textColor="@android:color/white"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-                    </FrameLayout>
-
-                    <TextView
-                        android:id="@+id/visualTrackMeta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="@string/no_visual_preview"
-                        android:textColor="@color/avtohit_muted"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/trackVoiceLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
-                        android:text="@string/track_voice"
-                        android:textColor="@color/avtohit_text"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <FrameLayout
-                        android:id="@+id/audioTrackLane"
-                        android:layout_width="match_parent"
-                        android:layout_height="72dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/bg_timeline_lane"
-                        android:padding="8dp">
-
-                        <LinearLayout
-                            android:id="@+id/audioWaveform"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="@drawable/bg_track_audio"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal"
-                            android:paddingStart="14dp"
-                            android:paddingEnd="14dp" />
-
-                        <TextView
-                            android:id="@+id/audioTrackClip"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginStart="14dp"
-                            android:text="@string/audio_track_default"
-                            android:textColor="@android:color/white"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-                    </FrameLayout>
-
-                    <TextView
-                        android:id="@+id/audioTrackMeta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="@string/no_audio_preview"
-                        android:textColor="@color/avtohit_muted"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/trackMusicLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
-                        android:text="@string/track_music"
-                        android:textColor="@color/avtohit_text"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/musicTrackPlaceholder"
-                        android:layout_width="match_parent"
-                        android:layout_height="56dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/bg_track_placeholder"
-                        android:gravity="center_vertical"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:text="@string/music_track_empty"
-                        android:textColor="@color/avtohit_muted"
-                        android:textSize="13sp" />
-            </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
                 android:id="@+id/previewCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -484,12 +335,15 @@
 
             <ProgressBar
                 android:id="@+id/progress"
-                style="?android:attr/progressBarStyleLarge"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="center_horizontal"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="12dp"
                 android:layout_marginTop="18dp"
-                android:indeterminate="true"
+                android:indeterminate="false"
+                android:max="1000"
+                android:progress="0"
+                android:progressBackgroundTint="@color/avtohit_disabled_tint"
+                android:progressTint="@color/avtohit_positive"
                 android:visibility="gone" />
         </LinearLayout>
     </ScrollView>

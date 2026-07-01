@@ -10,6 +10,7 @@ import android.webkit.MimeTypeMap;
 import com.arthenica.ffmpegkit.FFmpegKit;
 import com.arthenica.ffmpegkit.FFmpegSession;
 import com.arthenica.ffmpegkit.ReturnCode;
+import com.arthenica.ffmpegkit.Statistics;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -20,6 +21,8 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class AvtohitProcessor {
     public enum VisualKind {
@@ -46,6 +49,10 @@ public final class AvtohitProcessor {
         }
     }
 
+    public interface ProgressListener {
+        void onProgress(long currentMs, long totalMs);
+    }
+
     public Result render(
             Context context,
             Uri audioUri,
@@ -53,7 +60,9 @@ public final class AvtohitProcessor {
             String visualMimeType,
             Uri destinationUri,
             ExportProfile exportProfile,
-            int frameRate
+            int frameRate,
+            long targetDurationMs,
+            ProgressListener progressListener
     ) throws IOException, AvtohitException {
         ContentResolver resolver = context.getContentResolver();
         File workDir = new File(context.getCacheDir(), "avtohit");
@@ -75,9 +84,9 @@ public final class AvtohitProcessor {
             boolean videoReencoded = visualKind == VisualKind.VIDEO;
 
             if (visualKind == VisualKind.IMAGE) {
-                session = execute(buildImageCommand(audioFile, visualFile, outputFile, exportProfile, frameRate));
+                session = execute(buildImageCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener);
             } else {
-                session = execute(buildVideoCommand(audioFile, visualFile, outputFile, exportProfile, frameRate));
+                session = execute(buildVideoCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener);
             }
 
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
@@ -112,8 +121,37 @@ public final class AvtohitProcessor {
         }
     }
 
-    private static FFmpegSession execute(List<String> arguments) {
-        return FFmpegKit.executeWithArguments(arguments.toArray(new String[0]));
+    private static FFmpegSession execute(List<String> arguments, long targetDurationMs, ProgressListener progressListener) throws IOException {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<FFmpegSession> sessionRef = new AtomicReference<>();
+
+        FFmpegKit.executeWithArgumentsAsync(
+                arguments.toArray(new String[0]),
+                session -> {
+                    sessionRef.set(session);
+                    latch.countDown();
+                },
+                log -> { },
+                statistics -> publishProgress(statistics, targetDurationMs, progressListener)
+        );
+
+        try {
+            latch.await();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Render interrupted.", error);
+        }
+
+        return sessionRef.get();
+    }
+
+    private static void publishProgress(Statistics statistics, long targetDurationMs, ProgressListener progressListener) {
+        if (progressListener == null || targetDurationMs <= 0L || statistics == null) {
+            return;
+        }
+        long statisticTimeMs = Math.round(statistics.getTime());
+        long currentMs = Math.min(Math.max(0L, statisticTimeMs), targetDurationMs);
+        progressListener.onProgress(currentMs, targetDurationMs);
     }
 
     private static List<String> buildImageCommand(
