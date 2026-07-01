@@ -134,6 +134,7 @@ public final class MainActivity extends Activity {
     private ProgressBar progress;
     private LinearLayout rootContainer;
     private LinearLayout audioWaveform;
+    private View statusBarSpacer;
     private View topBar;
     private View projectSummaryCard;
     private View timelineCard;
@@ -242,6 +243,7 @@ public final class MainActivity extends Activity {
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
         audioWaveform = findViewById(R.id.audioWaveform);
+        statusBarSpacer = findViewById(R.id.statusBarSpacer);
         topBar = findViewById(R.id.topBar);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         timelineCard = findViewById(R.id.timelineCard);
@@ -842,12 +844,9 @@ public final class MainActivity extends Activity {
             } else {
                 topInset = insets.getSystemWindowInsetTop();
             }
-            view.setPadding(
-                    view.getPaddingLeft(),
-                    topInset,
-                    view.getPaddingRight(),
-                    view.getPaddingBottom()
-            );
+            android.view.ViewGroup.LayoutParams params = statusBarSpacer.getLayoutParams();
+            params.height = topInset;
+            statusBarSpacer.setLayoutParams(params);
             return insets;
         });
         content.requestApplyInsets();

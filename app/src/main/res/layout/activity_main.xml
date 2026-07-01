@@ -1,26 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@android:color/black"
+    android:orientation="vertical">
 
-    <LinearLayout
-        android:id="@+id/rootContainer"
+    <View
+        android:id="@+id/statusBarSpacer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingLeft="16dp"
-        android:paddingTop="16dp"
-        android:paddingRight="16dp"
-        android:paddingBottom="16dp">
+        android:layout_height="0dp"
+        android:background="@android:color/black" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <LinearLayout
-            android:id="@+id/topBar"
+            android:id="@+id/rootContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:padding="12dp">
+            android:background="@color/avtohit_background"
+            android:orientation="vertical"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:paddingBottom="16dp">
+
+            <ImageView
+                android:id="@+id/headerBanner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:contentDescription="@string/app_name"
+                android:scaleType="fitCenter"
+                android:src="@drawable/avtohit_header_banner" />
+
+            <LinearLayout
+                android:id="@+id/topBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="4dp">
 
             <ImageButton
                 android:id="@+id/backButton"
@@ -89,14 +114,14 @@
                     android:textColor="@android:color/white"
                     android:textSize="15sp" />
             </LinearLayout>
-        </LinearLayout>
+            </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
             <Button
                 android:id="@+id/selectAudioButton"
@@ -120,17 +145,17 @@
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
                 android:textSize="13sp" />
-        </LinearLayout>
+            </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/projectSummaryCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/bg_surface_card"
-            android:elevation="2dp"
-            android:orientation="vertical"
-            android:padding="18dp">
+            <LinearLayout
+                android:id="@+id/projectSummaryCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_surface_card"
+                android:elevation="2dp"
+                android:orientation="vertical"
+                android:padding="18dp">
 
             <TextView
                 android:id="@+id/projectMode"
@@ -182,17 +207,17 @@
                     android:textColor="@color/avtohit_text"
                     android:textSize="12sp" />
             </LinearLayout>
-        </LinearLayout>
+            </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/timelineCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:background="@drawable/bg_surface_card"
-            android:elevation="2dp"
-            android:orientation="vertical"
-            android:padding="18dp">
+            <LinearLayout
+                android:id="@+id/timelineCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/bg_surface_card"
+                android:elevation="2dp"
+                android:orientation="vertical"
+                android:padding="18dp">
 
             <TextView
                 android:id="@+id/timelineTitle"
@@ -331,17 +356,17 @@
                         android:textColor="@color/avtohit_muted"
                         android:textSize="13sp" />
             </LinearLayout>
-        </LinearLayout>
+            </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/previewCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:background="@drawable/bg_surface_card"
-            android:elevation="2dp"
-            android:orientation="vertical"
-            android:padding="18dp">
+            <LinearLayout
+                android:id="@+id/previewCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/bg_surface_card"
+                android:elevation="2dp"
+                android:orientation="vertical"
+                android:padding="18dp">
 
             <TextView
                 android:id="@+id/previewTitle"
@@ -455,16 +480,17 @@
                     </LinearLayout>
                 </LinearLayout>
             </FrameLayout>
-        </LinearLayout>
+            </LinearLayout>
 
-        <ProgressBar
-            android:id="@+id/progress"
-            style="?android:attr/progressBarStyleLarge"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="18dp"
-            android:indeterminate="true"
-            android:visibility="gone" />
-    </LinearLayout>
-</ScrollView>
+            <ProgressBar
+                android:id="@+id/progress"
+                style="?android:attr/progressBarStyleLarge"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="18dp"
+                android:indeterminate="true"
+                android:visibility="gone" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
