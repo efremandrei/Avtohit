@@ -40,80 +40,22 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:gravity="center_vertical"
+                android:gravity="end|center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="4dp"
                 android:paddingTop="4dp"
                 android:paddingEnd="4dp"
                 android:paddingBottom="4dp">
 
-            <ImageButton
-                android:id="@+id/backButton"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_icon_button"
-                android:contentDescription="@string/back_button"
-                android:padding="10dp"
-                android:src="@android:drawable/ic_media_previous"
-                android:tint="@color/avtohit_text" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/projectTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/project_title_default"
-                    android:textColor="@color/avtohit_text"
-                    android:textSize="24sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/projectSubtitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/project_subtitle_default"
-                    android:textColor="@color/avtohit_muted"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
                 <ImageButton
                     android:id="@+id/settingsButton"
                     android:layout_width="44dp"
                     android:layout_height="44dp"
-                    android:layout_marginEnd="8dp"
                     android:background="@drawable/bg_icon_button"
                     android:contentDescription="@string/open_settings"
                     android:padding="10dp"
                     android:src="@android:drawable/ic_menu_manage"
                     android:tint="@color/icon_button_tint" />
-
-                <Button
-                    android:id="@+id/exportButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="46dp"
-                    android:background="@drawable/bg_export_button"
-                    android:enabled="false"
-                    android:minWidth="0dp"
-                    android:paddingStart="18dp"
-                    android:paddingEnd="18dp"
-                    android:text="@string/export_button"
-                    android:textAllCaps="false"
-                    android:textColor="@android:color/white"
-                    android:textSize="15sp" />
-            </LinearLayout>
             </LinearLayout>
 
             <LinearLayout
@@ -147,6 +89,18 @@
                 android:textSize="13sp" />
             </LinearLayout>
 
+            <Button
+                android:id="@+id/exportButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_export_button"
+                android:enabled="false"
+                android:text="@string/export_button"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="15sp" />
+
             <LinearLayout
                 android:id="@+id/projectSummaryCard"
                 android:layout_width="match_parent"
@@ -170,42 +124,94 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/visualChip"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_chip_primary"
-                    android:padding="10dp"
-                    android:text="@string/visual_not_selected"
-                    android:textColor="@color/avtohit_primary"
-                    android:textSize="12sp" />
+                    android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/audioChip"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_chip_accent"
-                    android:padding="10dp"
-                    android:text="@string/mp3_not_selected"
-                    android:textColor="@color/avtohit_accent"
-                    android:textSize="12sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/summary_visual"
+                        android:textColor="@color/avtohit_muted"
+                        android:textSize="11sp" />
 
-                <TextView
-                    android:id="@+id/exportChip"
+                    <TextView
+                        android:id="@+id/visualChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/visual_not_selected"
+                        android:textColor="@color/avtohit_text"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@color/avtohit_border" />
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_chip_neutral"
-                    android:padding="10dp"
-                    android:text="@string/export_resolution_1080"
-                    android:textColor="@color/avtohit_text"
-                    android:textSize="12sp" />
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/summary_audio"
+                        android:textColor="@color/avtohit_muted"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/audioChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/mp3_not_selected"
+                        android:textColor="@color/avtohit_text"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="@color/avtohit_border" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/summary_export"
+                        android:textColor="@color/avtohit_muted"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/exportChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/export_resolution_1080"
+                        android:textColor="@color/avtohit_text"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
             </LinearLayout>
             </LinearLayout>
 

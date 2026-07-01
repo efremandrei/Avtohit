@@ -102,8 +102,6 @@ public final class MainActivity extends Activity {
         }
     };
 
-    private TextView projectTitle;
-    private TextView projectSubtitle;
     private TextView projectMode;
     private TextView visualChip;
     private TextView audioChip;
@@ -114,7 +112,6 @@ public final class MainActivity extends Activity {
     private TextView status;
     private TextView previewTitle;
     private ImageView previewArtwork;
-    private ImageButton backButton;
     private ImageButton playButton;
     private SeekBar previewSeek;
     private Button exportButton;
@@ -131,7 +128,6 @@ public final class MainActivity extends Activity {
     private Uri audioUri;
     private Uri visualUri;
     private String visualMimeType;
-    private String customProjectTitle;
     private String audioDisplayName;
     private String visualDisplayName;
     private boolean visualIsVideo;
@@ -197,8 +193,6 @@ public final class MainActivity extends Activity {
     }
 
     private void bindViews() {
-        projectTitle = findViewById(R.id.projectTitle);
-        projectSubtitle = findViewById(R.id.projectSubtitle);
         projectMode = findViewById(R.id.projectMode);
         visualChip = findViewById(R.id.visualChip);
         audioChip = findViewById(R.id.audioChip);
@@ -211,7 +205,6 @@ public final class MainActivity extends Activity {
         previewTitle = findViewById(R.id.previewTitle);
         playButton = findViewById(R.id.playButton);
         previewSeek = findViewById(R.id.previewSeek);
-        backButton = findViewById(R.id.backButton);
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
         selectAudioButton = findViewById(R.id.selectAudioButton);
@@ -225,8 +218,6 @@ public final class MainActivity extends Activity {
     }
 
     private void bindActions() {
-        backButton.setOnClickListener(view -> finish());
-        projectTitle.setOnClickListener(view -> showRenameDialog());
         selectVisualButton.setOnClickListener(view -> openVisualPicker());
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         settingsButton.setOnClickListener(view -> showExportDialog(false));
@@ -324,7 +315,6 @@ public final class MainActivity extends Activity {
                 ? getString(R.string.video_reencoded_mp3_copied)
                 : getString(R.string.mp3_copied);
         status.setText(getString(R.string.done_detail, mode, audioMode));
-        projectSubtitle.setText(timestampedSubtitle("Last export"));
     }
 
     private void onRenderFailure(Throwable error) {
@@ -339,18 +329,13 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshProjectHeader() {
-        projectTitle.setText(currentProjectTitle());
-        projectSubtitle.setText(audioUri != null || visualUri != null
-                ? timestampedSubtitle("Draft updated")
-                : getString(R.string.project_subtitle_default));
-
         String visualSummary = visualDisplayName != null ? visualDisplayName : getString(R.string.visual_not_selected);
         String audioSummary = audioDisplayName != null ? audioDisplayName : getString(R.string.mp3_not_selected);
         String exportSummary = exportProfile.label + " / " + frameRate + "fps";
 
-        visualChip.setText(getString(R.string.project_chip_visual, ellipsize(visualSummary, 20)));
-        audioChip.setText(getString(R.string.project_chip_audio, ellipsize(audioSummary, 20)));
-        exportChip.setText(getString(R.string.project_chip_export, exportSummary));
+        visualChip.setText(ellipsize(visualSummary, 20));
+        audioChip.setText(ellipsize(audioSummary, 20));
+        exportChip.setText(exportSummary);
 
         if (audioUri == null && visualUri == null) {
             projectMode.setText(R.string.project_mode_default);
@@ -461,24 +446,6 @@ public final class MainActivity extends Activity {
                 .create();
         dialog.setOnShowListener(unused -> styleSettingsDialog(dialog, dialogTitle, dialogView));
         dialog.show();
-    }
-
-    private void showRenameDialog() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        input.setText(currentProjectTitle());
-        input.setSelection(input.getText().length());
-
-        new AlertDialog.Builder(this)
-                .setTitle("Rename Project")
-                .setView(input)
-                .setNegativeButton(R.string.export_cancel, null)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    String value = input.getText().toString().trim();
-                    customProjectTitle = value.isEmpty() ? null : value;
-                    refreshProjectHeader();
-                })
-                .show();
     }
 
     private void togglePreviewPlayback() {
@@ -690,21 +657,6 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private String currentProjectTitle() {
-        if (customProjectTitle != null && !customProjectTitle.trim().isEmpty()) {
-            return customProjectTitle;
-        }
-        if (audioDisplayName != null) {
-            return ellipsize(stripExtension(audioDisplayName), 26);
-        }
-        return getString(R.string.project_title_default);
-    }
-
-    private String timestampedSubtitle(String prefix) {
-        String stamp = new SimpleDateFormat("MMM d, HH:mm", Locale.US).format(new Date());
-        return prefix + " " + stamp;
-    }
-
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
@@ -799,12 +751,9 @@ public final class MainActivity extends Activity {
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
 
-        projectTitle.setTextColor(currentSkin.textColor);
-        projectSubtitle.setTextColor(currentSkin.mutedColor);
         projectMode.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
 
-        styleTopBarIconButton(backButton);
         styleTopBarIconButton(settingsButton);
         updateSystemBars();
     }
