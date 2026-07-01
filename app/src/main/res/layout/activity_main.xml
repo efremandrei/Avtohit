@@ -5,6 +5,7 @@
     android:fillViewport="true">
 
     <LinearLayout
+        android:id="@+id/rootContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -120,6 +121,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/projectSummaryCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
@@ -181,6 +183,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/timelineCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
@@ -190,6 +193,7 @@
             android:padding="18dp">
 
             <TextView
+                android:id="@+id/timelineTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/timeline_title"
@@ -214,6 +218,7 @@
                 android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/trackVisualLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/track_visual"
@@ -253,6 +258,7 @@
                         android:textSize="12sp" />
 
                     <TextView
+                        android:id="@+id/trackVoiceLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="18dp"
@@ -301,6 +307,7 @@
                         android:textSize="12sp" />
 
                     <TextView
+                        android:id="@+id/trackMusicLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="18dp"
@@ -325,6 +332,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/previewCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
@@ -334,6 +342,7 @@
             android:padding="18dp">
 
             <TextView
+                android:id="@+id/previewTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/preview_title"

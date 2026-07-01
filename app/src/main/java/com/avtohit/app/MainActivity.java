@@ -3,6 +3,7 @@ package com.avtohit.app;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.GradientDrawable;
@@ -43,6 +44,45 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_AUDIO = 1001;
     private static final int REQUEST_VISUAL = 1002;
     private static final int REQUEST_OUTPUT = 1003;
+    private static final String PREFS_NAME = "avtohit_settings";
+    private static final String PREF_SKIN = "app_skin";
+
+    private enum AppSkin {
+        LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFF5D6662, 0xFFD5DDD8, true),
+        FOREST("forest", "Forest", 0xFFEAF3EF, 0xFFF9FCFA, 0xFFE2ECE7, 0xFF17342B, 0xFF567065, 0xFFC8D9D0, true),
+        NIGHT("night", "Night", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF9FB1A9, 0xFF31403A, false);
+
+        final String key;
+        final String label;
+        final int backgroundColor;
+        final int surfaceColor;
+        final int surfaceAltColor;
+        final int textColor;
+        final int mutedColor;
+        final int borderColor;
+        final boolean lightStatusBar;
+
+        AppSkin(String key, String label, int backgroundColor, int surfaceColor, int surfaceAltColor, int textColor, int mutedColor, int borderColor, boolean lightStatusBar) {
+            this.key = key;
+            this.label = label;
+            this.backgroundColor = backgroundColor;
+            this.surfaceColor = surfaceColor;
+            this.surfaceAltColor = surfaceAltColor;
+            this.textColor = textColor;
+            this.mutedColor = mutedColor;
+            this.borderColor = borderColor;
+            this.lightStatusBar = lightStatusBar;
+        }
+
+        static AppSkin fromKey(String value) {
+            for (AppSkin skin : values()) {
+                if (skin.key.equals(value)) {
+                    return skin;
+                }
+            }
+            return LIGHT;
+        }
+    }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -77,7 +117,13 @@ public final class MainActivity extends Activity {
     private TextView audioTrackClip;
     private TextView audioTrackMeta;
     private TextView musicTrackPlaceholder;
+    private TextView timelineTitle;
+    private TextView trackVisualLabel;
+    private TextView trackVoiceLabel;
+    private TextView trackMusicLabel;
+    private TextView previewTitle;
     private ImageView previewArtwork;
+    private ImageButton backButton;
     private ImageButton playButton;
     private SeekBar previewSeek;
     private Button exportButton;
@@ -85,7 +131,11 @@ public final class MainActivity extends Activity {
     private Button selectAudioButton;
     private ImageButton settingsButton;
     private ProgressBar progress;
+    private LinearLayout rootContainer;
     private LinearLayout audioWaveform;
+    private View projectSummaryCard;
+    private View timelineCard;
+    private View previewCard;
     private View visualTrackLane;
     private View audioTrackLane;
 
@@ -102,6 +152,7 @@ public final class MainActivity extends Activity {
     private long visualDurationMs;
     private ExportProfile exportProfile = ExportProfile.P1080;
     private int frameRate = 30;
+    private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
 
     @Override
@@ -110,7 +161,9 @@ public final class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         bindViews();
+        currentSkin = readSavedSkin();
         applyTopInset();
+        applySkin();
         bindActions();
         refreshUi();
     }
@@ -172,20 +225,30 @@ public final class MainActivity extends Activity {
         audioTrackClip = findViewById(R.id.audioTrackClip);
         audioTrackMeta = findViewById(R.id.audioTrackMeta);
         musicTrackPlaceholder = findViewById(R.id.musicTrackPlaceholder);
+        timelineTitle = findViewById(R.id.timelineTitle);
+        trackVisualLabel = findViewById(R.id.trackVisualLabel);
+        trackVoiceLabel = findViewById(R.id.trackVoiceLabel);
+        trackMusicLabel = findViewById(R.id.trackMusicLabel);
+        previewTitle = findViewById(R.id.previewTitle);
         playButton = findViewById(R.id.playButton);
         previewSeek = findViewById(R.id.previewSeek);
+        backButton = findViewById(R.id.backButton);
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
         selectAudioButton = findViewById(R.id.selectAudioButton);
         settingsButton = findViewById(R.id.settingsButton);
         progress = findViewById(R.id.progress);
+        rootContainer = findViewById(R.id.rootContainer);
         audioWaveform = findViewById(R.id.audioWaveform);
+        projectSummaryCard = findViewById(R.id.projectSummaryCard);
+        timelineCard = findViewById(R.id.timelineCard);
+        previewCard = findViewById(R.id.previewCard);
         visualTrackLane = findViewById(R.id.visualTrackLane);
         audioTrackLane = findViewById(R.id.audioTrackLane);
     }
 
     private void bindActions() {
-        findViewById(R.id.backButton).setOnClickListener(view -> finish());
+        backButton.setOnClickListener(view -> finish());
         projectTitle.setOnClickListener(view -> showRenameDialog());
         selectVisualButton.setOnClickListener(view -> openVisualPicker());
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
@@ -402,6 +465,7 @@ public final class MainActivity extends Activity {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_export, null);
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
         if (exportProfile == ExportProfile.P720) {
@@ -412,19 +476,27 @@ public final class MainActivity extends Activity {
             resolutionGroup.check(R.id.resolution1080);
         }
         fpsGroup.check(frameRate == 60 ? R.id.fps60 : R.id.fps30);
+        if (currentSkin == AppSkin.FOREST) {
+            skinGroup.check(R.id.skinForest);
+        } else if (currentSkin == AppSkin.NIGHT) {
+            skinGroup.check(R.id.skinNight);
+        } else {
+            skinGroup.check(R.id.skinLight);
+        }
         updateExportSummary(dialogView, exportSummary);
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
         resolutionGroup.setOnCheckedChangeListener(listener);
         fpsGroup.setOnCheckedChangeListener(listener);
+        skinGroup.setOnCheckedChangeListener(listener);
 
         new AlertDialog.Builder(this)
-                .setTitle(R.string.export_dialog_title)
+                .setTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title)
                 .setView(dialogView)
                 .setNegativeButton(R.string.export_cancel, null)
                 .setNeutralButton(R.string.export_apply, (dialog, which) -> {
                     applyExportSelection(dialogView);
-                    status.setText(getString(R.string.export_status_saved, exportProfile.label, frameRate));
+                    status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
                     refreshUi();
                 })
                 .setPositiveButton(startExportWhenSaved ? R.string.export_start : R.string.export_apply, (dialog, which) -> {
@@ -433,7 +505,7 @@ public final class MainActivity extends Activity {
                     if (startExportWhenSaved) {
                         openOutputPicker();
                     } else {
-                        status.setText(getString(R.string.export_status_saved, exportProfile.label, frameRate));
+                        status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
                     }
                 })
                 .show();
@@ -517,8 +589,10 @@ public final class MainActivity extends Activity {
     private void applyExportSelection(View dialogView) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         int fpsId = fpsGroup.getCheckedRadioButtonId();
+        int skinId = skinGroup.getCheckedRadioButtonId();
 
         if (resolutionId == R.id.resolution720) {
             exportProfile = ExportProfile.P720;
@@ -529,11 +603,22 @@ public final class MainActivity extends Activity {
         }
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
+
+        if (skinId == R.id.skinForest) {
+            currentSkin = AppSkin.FOREST;
+        } else if (skinId == R.id.skinNight) {
+            currentSkin = AppSkin.NIGHT;
+        } else {
+            currentSkin = AppSkin.LIGHT;
+        }
+        saveSkin(currentSkin);
+        applySkin();
     }
 
     private void updateExportSummary(View dialogView, TextView exportSummary) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
 
         String resolutionLabel;
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
@@ -546,7 +631,16 @@ public final class MainActivity extends Activity {
         }
 
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
-        exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
+        String skinLabel;
+        int skinId = skinGroup.getCheckedRadioButtonId();
+        if (skinId == R.id.skinForest) {
+            skinLabel = AppSkin.FOREST.label;
+        } else if (skinId == R.id.skinNight) {
+            skinLabel = AppSkin.NIGHT.label;
+        } else {
+            skinLabel = AppSkin.LIGHT.label;
+        }
+        exportSummary.setText(getString(R.string.settings_summary, skinLabel, resolutionLabel, selectedFrameRate));
     }
 
     private Bitmap loadPreviewBitmap() {
@@ -754,5 +848,84 @@ public final class MainActivity extends Activity {
             return name;
         }
         return name.substring(0, dot);
+    }
+
+    private AppSkin readSavedSkin() {
+        String skinKey = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_SKIN, AppSkin.LIGHT.key);
+        return AppSkin.fromKey(skinKey);
+    }
+
+    private void saveSkin(AppSkin skin) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString(PREF_SKIN, skin.key)
+                .apply();
+    }
+
+    private void applySkin() {
+        View content = findViewById(android.R.id.content);
+        content.setBackgroundColor(currentSkin.backgroundColor);
+        rootContainer.setBackgroundColor(currentSkin.backgroundColor);
+
+        styleCard(projectSummaryCard, currentSkin.surfaceColor);
+        styleCard(timelineCard, currentSkin.surfaceColor);
+        styleCard(previewCard, currentSkin.surfaceColor);
+        styleSurface(visualTrackLane, currentSkin.surfaceAltColor, 18);
+        styleSurface(audioTrackLane, currentSkin.surfaceAltColor, 18);
+        styleSurface(musicTrackPlaceholder, currentSkin.surfaceAltColor, 16);
+
+        projectTitle.setTextColor(currentSkin.textColor);
+        projectSubtitle.setTextColor(currentSkin.mutedColor);
+        projectMode.setTextColor(currentSkin.textColor);
+        timelineTitle.setTextColor(currentSkin.textColor);
+        previewTitle.setTextColor(currentSkin.textColor);
+        trackVisualLabel.setTextColor(currentSkin.textColor);
+        trackVoiceLabel.setTextColor(currentSkin.textColor);
+        trackMusicLabel.setTextColor(currentSkin.textColor);
+        timelineHint.setTextColor(currentSkin.mutedColor);
+        visualTrackMeta.setTextColor(currentSkin.mutedColor);
+        audioTrackMeta.setTextColor(currentSkin.mutedColor);
+        musicTrackPlaceholder.setTextColor(currentSkin.mutedColor);
+
+        backButton.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
+        settingsButton.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
+        updateSystemBars();
+    }
+
+    private void styleCard(View view, int fillColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setCornerRadius(dp(22));
+        drawable.setStroke(dp(1), currentSkin.borderColor);
+        view.setBackground(drawable);
+    }
+
+    private void styleSurface(View view, int fillColor, int radiusDp) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setCornerRadius(dp(radiusDp));
+        drawable.setStroke(dp(1), currentSkin.borderColor);
+        view.setBackground(drawable);
+    }
+
+    private void updateSystemBars() {
+        getWindow().setStatusBarColor(currentSkin.backgroundColor);
+        getWindow().setNavigationBarColor(currentSkin.backgroundColor);
+        View decorView = getWindow().getDecorView();
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            if (getWindow().getInsetsController() != null) {
+                getWindow().getInsetsController().setSystemBarsAppearance(
+                        currentSkin.lightStatusBar ? android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS : 0,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                );
+            }
+        } else if (android.os.Build.VERSION.SDK_INT >= 23) {
+            int flags = decorView.getSystemUiVisibility();
+            if (currentSkin.lightStatusBar) {
+                decorView.setSystemUiVisibility(flags | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            } else {
+                decorView.setSystemUiVisibility(flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            }
+        }
     }
 }
