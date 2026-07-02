@@ -54,8 +54,7 @@
     <string name="about_github_plain">https://github.com/efremandrei/Avtohit</string>
     <string name="about_us_body">Developer: Andrei Efremushkin\n\n%1$s\n\nEmail: %2$s\n\nGitHub: %3$s</string>
     <string name="app_skin_light">Light</string>
-    <string name="app_skin_forest">Forest</string>
-    <string name="app_skin_night">Night</string>
+    <string name="app_skin_dark">Dark</string>
     <string name="export_apply">Save Settings</string>
     <string name="export_start">Export</string>
     <string name="export_cancel">Cancel</string>

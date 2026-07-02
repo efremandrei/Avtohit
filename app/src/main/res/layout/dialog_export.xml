@@ -106,16 +106,10 @@
                 android:text="@string/app_skin_light" />
 
             <RadioButton
-                android:id="@+id/skinForest"
+                android:id="@+id/skinDark"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/app_skin_forest" />
-
-            <RadioButton
-                android:id="@+id/skinNight"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/app_skin_night" />
+                android:text="@string/app_skin_dark" />
         </RadioGroup>
 
         <TextView

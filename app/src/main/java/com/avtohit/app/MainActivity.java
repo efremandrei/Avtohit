@@ -64,8 +64,7 @@ public final class MainActivity extends Activity {
 
     private enum AppSkin {
         LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFFD5DDD8, true),
-        FOREST("forest", "Forest", 0xFFEAF3EF, 0xFFF9FCFA, 0xFFE2ECE7, 0xFF17342B, 0xFFC8D9D0, true),
-        NIGHT("night", "Night", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF31403A, false);
+        DARK("dark", "Dark", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF31403A, false);
 
         final String key;
         final String label;
@@ -88,6 +87,12 @@ public final class MainActivity extends Activity {
         }
 
         static AppSkin fromKey(String value) {
+            if ("night".equals(value)) {
+                return DARK;
+            }
+            if ("forest".equals(value)) {
+                return LIGHT;
+            }
             for (AppSkin skin : values()) {
                 if (skin.key.equals(value)) {
                     return skin;
@@ -134,6 +139,8 @@ public final class MainActivity extends Activity {
     private View statusBarSpacer;
     private View projectSummaryCard;
     private View previewCard;
+    private View summaryDividerOne;
+    private View summaryDividerTwo;
 
     private Uri audioUri;
     private Uri visualUri;
@@ -239,6 +246,8 @@ public final class MainActivity extends Activity {
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         previewCard = findViewById(R.id.previewCard);
+        summaryDividerOne = findViewById(R.id.summaryDividerOne);
+        summaryDividerTwo = findViewById(R.id.summaryDividerTwo);
     }
 
     private void bindActions() {
@@ -541,10 +550,8 @@ public final class MainActivity extends Activity {
             resolutionGroup.check(R.id.resolution1080);
         }
         fpsGroup.check(frameRate == 60 ? R.id.fps60 : R.id.fps30);
-        if (currentSkin == AppSkin.FOREST) {
-            skinGroup.check(R.id.skinForest);
-        } else if (currentSkin == AppSkin.NIGHT) {
-            skinGroup.check(R.id.skinNight);
+        if (currentSkin == AppSkin.DARK) {
+            skinGroup.check(R.id.skinDark);
         } else {
             skinGroup.check(R.id.skinLight);
         }
@@ -705,10 +712,8 @@ public final class MainActivity extends Activity {
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
 
-        if (skinId == R.id.skinForest) {
-            currentSkin = AppSkin.FOREST;
-        } else if (skinId == R.id.skinNight) {
-            currentSkin = AppSkin.NIGHT;
+        if (skinId == R.id.skinDark) {
+            currentSkin = AppSkin.DARK;
         } else {
             currentSkin = AppSkin.LIGHT;
         }
@@ -734,10 +739,8 @@ public final class MainActivity extends Activity {
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
         String skinLabel;
         int skinId = skinGroup.getCheckedRadioButtonId();
-        if (skinId == R.id.skinForest) {
-            skinLabel = AppSkin.FOREST.label;
-        } else if (skinId == R.id.skinNight) {
-            skinLabel = AppSkin.NIGHT.label;
+        if (skinId == R.id.skinDark) {
+            skinLabel = AppSkin.DARK.label;
         } else {
             skinLabel = AppSkin.LIGHT.label;
         }
@@ -1057,6 +1060,9 @@ public final class MainActivity extends Activity {
         styleCard(previewCard, currentSkin.surfaceColor);
         styleIconButton(overflowMenuButton);
 
+        styleTextInputs(projectSummaryCard, currentSkin.textColor);
+        summaryDividerOne.setBackgroundColor(currentSkin.borderColor);
+        summaryDividerTwo.setBackgroundColor(currentSkin.borderColor);
         previewTitle.setTextColor(currentSkin.textColor);
 
         updateSystemBars();
@@ -1129,7 +1135,7 @@ public final class MainActivity extends Activity {
     }
 
     private int[] dialogPalette() {
-        boolean darkDialog = currentSkin == AppSkin.NIGHT;
+        boolean darkDialog = currentSkin == AppSkin.DARK;
         int surfaceColor = darkDialog ? currentSkin.surfaceColor : Color.WHITE;
         int summaryColor = darkDialog ? currentSkin.surfaceAltColor : 0xFFF4F6F4;
         int textColor = darkDialog ? currentSkin.textColor : 0xFF151817;

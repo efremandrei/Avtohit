@@ -135,6 +135,7 @@
                 </LinearLayout>
 
                 <View
+                    android:id="@+id/summaryDividerOne"
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:layout_marginTop="12dp"
@@ -149,7 +150,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/summary_visual"
+                        android:text="@string/summary_audio"
                         android:textColor="@color/avtohit_muted"
                         android:textSize="11sp" />
 
@@ -165,6 +166,7 @@
                 </LinearLayout>
 
                 <View
+                    android:id="@+id/summaryDividerTwo"
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:layout_marginTop="12dp"
