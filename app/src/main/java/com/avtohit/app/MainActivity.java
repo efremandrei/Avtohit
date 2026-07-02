@@ -25,6 +25,7 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
@@ -124,6 +125,7 @@ public final class MainActivity extends Activity {
     private TextView previewTitle;
     private ImageView previewArtwork;
     private ImageButton playButton;
+    private ImageButton overflowMenuButton;
     private SeekBar previewSeek;
     private Button exportButton;
     private Button selectVisualButton;
@@ -229,6 +231,7 @@ public final class MainActivity extends Activity {
         status = findViewById(R.id.status);
         previewTitle = findViewById(R.id.previewTitle);
         playButton = findViewById(R.id.playButton);
+        overflowMenuButton = findViewById(R.id.overflowMenuButton);
         previewSeek = findViewById(R.id.previewSeek);
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
@@ -245,6 +248,7 @@ public final class MainActivity extends Activity {
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         exportButton.setOnClickListener(view -> showExportDialog(true));
         playButton.setOnClickListener(view -> togglePreviewPlayback());
+        overflowMenuButton.setOnClickListener(view -> showOverflowMenu());
 
         previewSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -508,10 +512,29 @@ public final class MainActivity extends Activity {
         selectVisualButton.setSelected(visualUri != null);
         selectAudioButton.setSelected(audioUri != null);
         exportButton.setEnabled(canOpenMergeMenu);
+        overflowMenuButton.setEnabled(true);
         playButton.setEnabled(!rendering && audioUri != null);
         previewSeek.setEnabled(!rendering && audioUri != null);
         progress.setVisibility(rendering ? View.VISIBLE : View.GONE);
         playButton.setAlpha(playButton.isEnabled() ? 1f : 0.45f);
+    }
+
+    private void showOverflowMenu() {
+        PopupMenu popupMenu = new PopupMenu(this, overflowMenuButton);
+        popupMenu.getMenuInflater().inflate(R.menu.main_overflow_menu, popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == R.id.menu_help) {
+                showHelpDialog();
+                return true;
+            }
+            if (itemId == R.id.menu_about_us) {
+                showAboutDialog();
+                return true;
+            }
+            return false;
+        });
+        popupMenu.show();
     }
 
     private void showExportDialog(boolean startExportWhenSaved) {
@@ -520,13 +543,6 @@ public final class MainActivity extends Activity {
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
-        TextView aboutVersion = dialogView.findViewById(R.id.aboutVersion);
-        TextView aboutEmail = dialogView.findViewById(R.id.aboutEmail);
-        TextView aboutGithub = dialogView.findViewById(R.id.aboutGithub);
-
-        aboutVersion.setText(aboutVersionSummary());
-        aboutEmail.setMovementMethod(LinkMovementMethod.getInstance());
-        aboutGithub.setMovementMethod(LinkMovementMethod.getInstance());
 
         if (exportProfile == ExportProfile.P720) {
             resolutionGroup.check(R.id.resolution720);
@@ -550,11 +566,7 @@ public final class MainActivity extends Activity {
         fpsGroup.setOnCheckedChangeListener(listener);
         skinGroup.setOnCheckedChangeListener(listener);
 
-        TextView dialogTitle = new TextView(this);
-        dialogTitle.setPadding(dp(24), dp(20), dp(24), dp(8));
-        dialogTitle.setText(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
-        dialogTitle.setTextSize(20f);
-        dialogTitle.setTypeface(dialogTitle.getTypeface(), android.graphics.Typeface.BOLD);
+        TextView dialogTitle = buildDialogTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setCustomTitle(dialogTitle)
@@ -580,6 +592,38 @@ public final class MainActivity extends Activity {
                 })
                 .create();
         dialog.setOnShowListener(unused -> styleSettingsDialog(dialog, dialogTitle, dialogView));
+        dialog.show();
+    }
+
+    private void showHelpDialog() {
+        showInfoDialog(R.string.help_title, getString(R.string.help_body), false);
+    }
+
+    private void showAboutDialog() {
+        CharSequence body = getString(
+                R.string.about_us_body,
+                aboutVersionSummary(),
+                getString(R.string.about_email_plain),
+                getString(R.string.about_github_plain)
+        );
+        showInfoDialog(R.string.about_us_title, body, true);
+    }
+
+    private void showInfoDialog(int titleResId, CharSequence body, boolean enableLinks) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null);
+        TextView infoBody = dialogView.findViewById(R.id.infoBody);
+        infoBody.setText(body);
+        if (enableLinks) {
+            infoBody.setMovementMethod(LinkMovementMethod.getInstance());
+        }
+
+        TextView dialogTitle = buildDialogTitle(titleResId);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setPositiveButton(R.string.info_dialog_close, null)
+                .create();
+        dialog.setOnShowListener(unused -> styleInfoDialog(dialog, dialogTitle, dialogView));
         dialog.show();
     }
 
@@ -1017,6 +1061,7 @@ public final class MainActivity extends Activity {
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
+        styleIconButton(overflowMenuButton);
 
         projectMode.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
@@ -1030,6 +1075,19 @@ public final class MainActivity extends Activity {
         drawable.setCornerRadius(dp(22));
         drawable.setStroke(dp(1), currentSkin.borderColor);
         view.setBackground(drawable);
+    }
+
+    private void styleIconButton(ImageButton button) {
+        if (button == null) {
+            return;
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(currentSkin.surfaceColor);
+        drawable.setCornerRadius(dp(14));
+        drawable.setStroke(dp(1), currentSkin.borderColor);
+        button.setBackground(drawable);
+        button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
+        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
     private void updateSystemBars() {
@@ -1050,12 +1108,43 @@ public final class MainActivity extends Activity {
     }
 
     private void styleSettingsDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
+        int[] palette = dialogPalette();
+        int surfaceColor = palette[0];
+        int summaryColor = palette[1];
+        int textColor = palette[2];
+        int borderColor = palette[3];
+
+        styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.exportDialogContent), textColor, surfaceColor);
+        View exportSummary = dialogView.findViewById(R.id.exportSummary);
+        GradientDrawable summaryDrawable = new GradientDrawable();
+        summaryDrawable.setColor(summaryColor);
+        summaryDrawable.setCornerRadius(dp(16));
+        summaryDrawable.setStroke(dp(1), borderColor);
+        exportSummary.setBackground(summaryDrawable);
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void styleInfoDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
+        int[] palette = dialogPalette();
+        int surfaceColor = palette[0];
+        int textColor = palette[2];
+        styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.infoDialogContent), textColor, surfaceColor);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+    }
+
+    private int[] dialogPalette() {
         boolean darkDialog = currentSkin == AppSkin.NIGHT;
         int surfaceColor = darkDialog ? currentSkin.surfaceColor : Color.WHITE;
         int summaryColor = darkDialog ? currentSkin.surfaceAltColor : 0xFFF4F6F4;
         int textColor = darkDialog ? currentSkin.textColor : 0xFF151817;
         int borderColor = darkDialog ? currentSkin.borderColor : 0xFFD5DDD8;
+        return new int[]{surfaceColor, summaryColor, textColor, borderColor};
+    }
 
+    private void styleDialogShell(AlertDialog dialog, TextView dialogTitle, View content, int textColor, int surfaceColor) {
         if (dialog.getWindow() != null) {
             GradientDrawable windowDrawable = new GradientDrawable();
             windowDrawable.setColor(surfaceColor);
@@ -1065,28 +1154,17 @@ public final class MainActivity extends Activity {
 
         dialogTitle.setBackgroundColor(surfaceColor);
         dialogTitle.setTextColor(textColor);
-
-        View content = dialogView.findViewById(R.id.exportDialogContent);
         content.setBackgroundColor(surfaceColor);
-        styleTextInputs(dialogView, textColor);
+        styleTextInputs(content, textColor);
+    }
 
-        View exportSummary = dialogView.findViewById(R.id.exportSummary);
-        GradientDrawable summaryDrawable = new GradientDrawable();
-        summaryDrawable.setColor(summaryColor);
-        summaryDrawable.setCornerRadius(dp(16));
-        summaryDrawable.setStroke(dp(1), borderColor);
-        exportSummary.setBackground(summaryDrawable);
-
-        View aboutSection = dialogView.findViewById(R.id.aboutSection);
-        GradientDrawable aboutDrawable = new GradientDrawable();
-        aboutDrawable.setColor(summaryColor);
-        aboutDrawable.setCornerRadius(dp(16));
-        aboutDrawable.setStroke(dp(1), borderColor);
-        aboutSection.setBackground(aboutDrawable);
-
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    private TextView buildDialogTitle(int titleResId) {
+        TextView dialogTitle = new TextView(this);
+        dialogTitle.setPadding(dp(24), dp(20), dp(24), dp(8));
+        dialogTitle.setText(titleResId);
+        dialogTitle.setTextSize(20f);
+        dialogTitle.setTypeface(dialogTitle.getTypeface(), android.graphics.Typeface.BOLD);
+        return dialogTitle;
     }
 
     private void styleTextInputs(View root, int textColor) {
