@@ -577,6 +577,10 @@ public final class MainActivity extends Activity {
                 showHelpDialog();
                 return true;
             }
+            if (itemId == R.id.menu_skin) {
+                showSkinDialog();
+                return true;
+            }
             if (itemId == R.id.menu_about_us) {
                 showAboutDialog();
                 return true;
@@ -590,7 +594,6 @@ public final class MainActivity extends Activity {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_export, null);
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
-        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
         if (exportProfile == ExportProfile.P720) {
@@ -601,17 +604,11 @@ public final class MainActivity extends Activity {
             resolutionGroup.check(R.id.resolution1080);
         }
         fpsGroup.check(frameRate == 60 ? R.id.fps60 : R.id.fps30);
-        if (currentSkin == AppSkin.DARK) {
-            skinGroup.check(R.id.skinDark);
-        } else {
-            skinGroup.check(R.id.skinLight);
-        }
         updateExportSummary(dialogView, exportSummary);
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
         resolutionGroup.setOnCheckedChangeListener(listener);
         fpsGroup.setOnCheckedChangeListener(listener);
-        skinGroup.setOnCheckedChangeListener(listener);
 
         TextView dialogTitle = buildDialogTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
 
@@ -621,7 +618,7 @@ public final class MainActivity extends Activity {
                 .setNegativeButton(R.string.export_cancel, null)
                 .setNeutralButton(R.string.export_apply, (dialogInterface, which) -> {
                     applyExportSelection(dialogView);
-                    status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
+                    status.setText(getString(R.string.export_status_saved, exportProfile.label, frameRate));
                     refreshUi();
                 })
                 .setPositiveButton(startExportWhenSaved ? R.string.export_start : R.string.export_apply, (dialogInterface, which) -> {
@@ -634,8 +631,32 @@ public final class MainActivity extends Activity {
                             openOutputPicker();
                         }
                     } else {
-                        status.setText(getString(R.string.settings_status_saved, currentSkin.label, exportProfile.label, frameRate));
+                        status.setText(getString(R.string.export_status_saved, exportProfile.label, frameRate));
                     }
+                })
+                .create();
+        dialog.setOnShowListener(unused -> styleSettingsDialog(dialog, dialogTitle, dialogView));
+        dialog.show();
+    }
+
+    private void showSkinDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_skin, null);
+        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
+        TextView skinSummary = dialogView.findViewById(R.id.exportSummary);
+
+        skinGroup.check(currentSkin == AppSkin.DARK ? R.id.skinDark : R.id.skinLight);
+        updateSkinSummary(skinGroup, skinSummary);
+        skinGroup.setOnCheckedChangeListener((group, checkedId) -> updateSkinSummary(group, skinSummary));
+
+        TextView dialogTitle = buildDialogTitle(R.string.app_skin_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setNegativeButton(R.string.export_cancel, null)
+                .setPositiveButton(R.string.export_apply, (dialogInterface, which) -> {
+                    applySkinSelection(dialogView);
+                    status.setText(getString(R.string.skin_status_saved, currentSkin.label));
+                    refreshUi();
                 })
                 .create();
         dialog.setOnShowListener(unused -> styleSettingsDialog(dialog, dialogTitle, dialogView));
@@ -748,10 +769,8 @@ public final class MainActivity extends Activity {
     private void applyExportSelection(View dialogView) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
-        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         int fpsId = fpsGroup.getCheckedRadioButtonId();
-        int skinId = skinGroup.getCheckedRadioButtonId();
 
         if (resolutionId == R.id.resolution720) {
             exportProfile = ExportProfile.P720;
@@ -762,7 +781,11 @@ public final class MainActivity extends Activity {
         }
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
+    }
 
+    private void applySkinSelection(View dialogView) {
+        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
+        int skinId = skinGroup.getCheckedRadioButtonId();
         if (skinId == R.id.skinDark) {
             currentSkin = AppSkin.DARK;
         } else {
@@ -775,7 +798,6 @@ public final class MainActivity extends Activity {
     private void updateExportSummary(View dialogView, TextView exportSummary) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
-        RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
 
         String resolutionLabel;
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
@@ -788,14 +810,14 @@ public final class MainActivity extends Activity {
         }
 
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
-        String skinLabel;
-        int skinId = skinGroup.getCheckedRadioButtonId();
-        if (skinId == R.id.skinDark) {
-            skinLabel = AppSkin.DARK.label;
-        } else {
-            skinLabel = AppSkin.LIGHT.label;
-        }
-        exportSummary.setText(getString(R.string.settings_summary, skinLabel, resolutionLabel, selectedFrameRate));
+        exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
+    }
+
+    private void updateSkinSummary(RadioGroup skinGroup, TextView skinSummary) {
+        String skinLabel = skinGroup.getCheckedRadioButtonId() == R.id.skinDark
+                ? AppSkin.DARK.label
+                : AppSkin.LIGHT.label;
+        skinSummary.setText(getString(R.string.skin_summary, skinLabel));
     }
 
     private Bitmap loadPreviewBitmap() {
@@ -1140,7 +1162,7 @@ public final class MainActivity extends Activity {
         }
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(currentSkin.surfaceColor);
-        drawable.setCornerRadius(dp(14));
+        drawable.setCornerRadius(dp(18));
         drawable.setStroke(dp(1), currentSkin.borderColor);
         button.setBackground(drawable);
         button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));

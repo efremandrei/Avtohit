@@ -44,12 +44,12 @@
 
                 <ImageButton
                     android:id="@+id/overflowMenuButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
                     android:background="@drawable/bg_icon_button"
                     android:contentDescription="@string/open_app_menu"
-                    android:padding="10dp"
-                    android:src="@android:drawable/ic_menu_more"
+                    android:padding="14dp"
+                    android:src="@drawable/ic_more_vertical"
                     android:tint="@color/icon_button_tint" />
             </LinearLayout>
 
@@ -63,50 +63,71 @@
             <Button
                 android:id="@+id/selectAudioButton"
                 android:layout_width="0dp"
-                android:layout_height="64dp"
+                android:layout_height="72dp"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_selectable_action_button"
                 android:drawableStart="@drawable/ic_music_note"
-                android:drawablePadding="10dp"
+                android:drawablePadding="8dp"
                 android:drawableTint="@android:color/white"
+                android:fontFamily="sans"
                 android:gravity="center"
+                android:includeFontPadding="false"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:singleLine="true"
                 android:text="@string/select_mp3"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
-                android:textSize="15sp" />
+                android:textSize="16sp"
+                android:textStyle="normal" />
 
             <Button
                 android:id="@+id/selectVisualButton"
                 android:layout_width="0dp"
-                android:layout_height="64dp"
+                android:layout_height="72dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_selectable_action_button"
                 android:drawableStart="@drawable/ic_image"
-                android:drawablePadding="10dp"
+                android:drawablePadding="8dp"
                 android:drawableTint="@android:color/white"
+                android:fontFamily="sans"
                 android:gravity="center"
+                android:includeFontPadding="false"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:singleLine="true"
                 android:text="@string/select_visual"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
-                android:textSize="15sp" />
+                android:textSize="16sp"
+                android:textStyle="normal" />
             </LinearLayout>
 
             <Button
                 android:id="@+id/exportButton"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:layout_marginTop="10dp"
+                android:layout_height="76dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/bg_export_button"
                 android:drawableStart="@drawable/ic_film"
-                android:drawablePadding="12dp"
+                android:drawablePadding="16dp"
                 android:drawableTint="@android:color/white"
                 android:enabled="false"
+                android:fontFamily="sans"
                 android:gravity="center"
+                android:includeFontPadding="false"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
                 android:text="@string/export_button"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
-                android:textSize="18sp" />
+                android:textSize="22sp"
+                android:textStyle="normal" />
 
             <LinearLayout
                 android:id="@+id/projectSummaryCard"
