@@ -46,7 +46,8 @@
     <string name="export_fps_title">Frame rate</string>
     <string name="app_skin_title">Application skin</string>
     <string name="help_title">Help</string>
-    <string name="help_body">1. Tap Add Audio and choose an MP3.\n\n2. Tap Add Video/Image and choose a picture or short video.\n\n3. Tap Merge To Video to adjust export settings and choose where to save the MP4.\n\n4. If you choose an image, AVTOHIT creates a video from that single picture for the full MP3 length.\n\n5. If you choose a video, AVTOHIT removes its original audio, loops the visual track as needed, and uses the MP3 as the soundtrack.</string>
+    <string name="help_body">1. The menu opens Help and About Us.\n\n2. Add Audio lets you choose the MP3 soundtrack.\n\n3. Add Video/Image lets you choose the picture or short video.\n\n4. Merge To Video opens export settings and starts saving the final MP4.\n\n5. The status panel shows the selected visual, selected audio, and current export setup.\n\n6. Preview shows how the visual will look and lets you play the audio preview.</string>
+    <string name="help_image_description">Annotated AVTOHIT screen with numbered callouts</string>
     <string name="about_us_title">About Us</string>
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
     <string name="about_email_plain">andrei.efr@gmail.com</string>

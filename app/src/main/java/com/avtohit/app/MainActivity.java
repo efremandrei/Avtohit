@@ -596,7 +596,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showHelpDialog() {
-        showInfoDialog(R.string.help_title, getString(R.string.help_body), false);
+        showInfoDialog(R.string.help_title, getString(R.string.help_body), false, R.drawable.help_ui_guide);
     }
 
     private void showAboutDialog() {
@@ -606,12 +606,17 @@ public final class MainActivity extends Activity {
                 getString(R.string.about_email_plain),
                 getString(R.string.about_github_plain)
         );
-        showInfoDialog(R.string.about_us_title, body, true);
+        showInfoDialog(R.string.about_us_title, body, true, 0);
     }
 
-    private void showInfoDialog(int titleResId, CharSequence body, boolean enableLinks) {
+    private void showInfoDialog(int titleResId, CharSequence body, boolean enableLinks, int imageResId) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null);
+        android.widget.ImageView infoImage = dialogView.findViewById(R.id.infoImage);
         TextView infoBody = dialogView.findViewById(R.id.infoBody);
+        if (imageResId != 0) {
+            infoImage.setVisibility(View.VISIBLE);
+            infoImage.setImageResource(imageResId);
+        }
         infoBody.setText(body);
         if (enableLinks) {
             infoBody.setMovementMethod(LinkMovementMethod.getInstance());

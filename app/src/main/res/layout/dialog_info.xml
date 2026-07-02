@@ -14,10 +14,20 @@
         android:paddingEnd="18dp"
         android:paddingBottom="12dp">
 
+        <ImageView
+            android:id="@+id/infoImage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/help_image_description"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/infoBody"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
             android:autoLink="web|email"
             android:lineSpacingExtra="4dp"
             android:textColor="@color/avtohit_text"
