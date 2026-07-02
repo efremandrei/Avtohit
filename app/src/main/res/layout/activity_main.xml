@@ -13,7 +13,8 @@
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:fillViewport="true">
 
         <LinearLayout
@@ -34,24 +35,6 @@
                 android:contentDescription="@string/app_name"
                 android:scaleType="fitCenter"
                 android:src="@drawable/avtohit_header_banner" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="end|center_vertical"
-                android:orientation="horizontal">
-
-                <ImageButton
-                    android:id="@+id/overflowMenuButton"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/bg_icon_button"
-                    android:contentDescription="@string/open_app_menu"
-                    android:padding="14dp"
-                    android:src="@drawable/ic_more_vertical"
-                    android:tint="@color/icon_button_tint" />
-            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -523,4 +506,76 @@
                 android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/bottomActionsBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/avtohit_background"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
+
+        <Button
+            android:id="@+id/helpButton"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tonal_button"
+            android:fontFamily="sans"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="@string/help_title"
+            android:textAllCaps="false"
+            android:textColor="@color/avtohit_text"
+            android:textSize="13sp"
+            android:textStyle="normal" />
+
+        <Button
+            android:id="@+id/skinButton"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tonal_button"
+            android:fontFamily="sans"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="@string/app_skin_title"
+            android:textAllCaps="false"
+            android:textColor="@color/avtohit_text"
+            android:textSize="12sp"
+            android:textStyle="normal" />
+
+        <Button
+            android:id="@+id/aboutButton"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tonal_button"
+            android:fontFamily="sans"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="@string/about_us_title"
+            android:textAllCaps="false"
+            android:textColor="@color/avtohit_text"
+            android:textSize="13sp"
+            android:textStyle="normal" />
+    </LinearLayout>
 </LinearLayout>

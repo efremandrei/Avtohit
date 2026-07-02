@@ -25,7 +25,6 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
@@ -141,13 +140,16 @@ public final class MainActivity extends Activity {
     private TextView previewTitle;
     private ImageView previewArtwork;
     private ImageButton playButton;
-    private ImageButton overflowMenuButton;
     private SeekBar previewSeek;
     private Button exportButton;
     private Button selectVisualButton;
     private Button selectAudioButton;
+    private Button helpButton;
+    private Button skinButton;
+    private Button aboutButton;
     private ProgressBar progress;
     private LinearLayout rootContainer;
+    private LinearLayout bottomActionsBar;
     private View statusBarSpacer;
     private View projectSummaryCard;
     private View previewCard;
@@ -254,13 +256,16 @@ public final class MainActivity extends Activity {
         status = findViewById(R.id.status);
         previewTitle = findViewById(R.id.previewTitle);
         playButton = findViewById(R.id.playButton);
-        overflowMenuButton = findViewById(R.id.overflowMenuButton);
         previewSeek = findViewById(R.id.previewSeek);
         exportButton = findViewById(R.id.exportButton);
         selectVisualButton = findViewById(R.id.selectVisualButton);
         selectAudioButton = findViewById(R.id.selectAudioButton);
+        helpButton = findViewById(R.id.helpButton);
+        skinButton = findViewById(R.id.skinButton);
+        aboutButton = findViewById(R.id.aboutButton);
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
+        bottomActionsBar = findViewById(R.id.bottomActionsBar);
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         previewCard = findViewById(R.id.previewCard);
@@ -273,7 +278,9 @@ public final class MainActivity extends Activity {
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         exportButton.setOnClickListener(view -> showExportDialog(true));
         playButton.setOnClickListener(view -> togglePreviewPlayback());
-        overflowMenuButton.setOnClickListener(view -> showOverflowMenu());
+        helpButton.setOnClickListener(view -> showHelpDialog());
+        skinButton.setOnClickListener(view -> showSkinDialog());
+        aboutButton.setOnClickListener(view -> showAboutDialog());
 
         previewSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -561,33 +568,13 @@ public final class MainActivity extends Activity {
         selectVisualButton.setSelected(visualUri != null);
         selectAudioButton.setSelected(audioUri != null);
         exportButton.setEnabled(canOpenMergeMenu);
-        overflowMenuButton.setEnabled(true);
+        helpButton.setEnabled(true);
+        skinButton.setEnabled(true);
+        aboutButton.setEnabled(true);
         playButton.setEnabled(!rendering && audioUri != null);
         previewSeek.setEnabled(!rendering && audioUri != null);
         progress.setVisibility(rendering ? View.VISIBLE : View.GONE);
         playButton.setAlpha(playButton.isEnabled() ? 1f : 0.45f);
-    }
-
-    private void showOverflowMenu() {
-        PopupMenu popupMenu = new PopupMenu(this, overflowMenuButton);
-        popupMenu.getMenuInflater().inflate(R.menu.main_overflow_menu, popupMenu.getMenu());
-        popupMenu.setOnMenuItemClickListener(item -> {
-            int itemId = item.getItemId();
-            if (itemId == R.id.menu_help) {
-                showHelpDialog();
-                return true;
-            }
-            if (itemId == R.id.menu_skin) {
-                showSkinDialog();
-                return true;
-            }
-            if (itemId == R.id.menu_about_us) {
-                showAboutDialog();
-                return true;
-            }
-            return false;
-        });
-        popupMenu.show();
     }
 
     private void showExportDialog(boolean startExportWhenSaved) {
@@ -1128,10 +1115,13 @@ public final class MainActivity extends Activity {
         View content = findViewById(android.R.id.content);
         content.setBackgroundColor(currentSkin.backgroundColor);
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
+        bottomActionsBar.setBackgroundColor(currentSkin.backgroundColor);
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
-        styleIconButton(overflowMenuButton);
+        styleBottomActionButton(helpButton);
+        styleBottomActionButton(skinButton);
+        styleBottomActionButton(aboutButton);
 
         styleTextInputs(projectSummaryCard, currentSkin.textColor);
         styleSecondaryText(visualChip);
@@ -1156,16 +1146,16 @@ public final class MainActivity extends Activity {
         view.setBackground(drawable);
     }
 
-    private void styleIconButton(ImageButton button) {
+    private void styleBottomActionButton(Button button) {
         if (button == null) {
             return;
         }
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(currentSkin.surfaceColor);
-        drawable.setCornerRadius(dp(18));
+        drawable.setCornerRadius(dp(16));
         drawable.setStroke(dp(1), currentSkin.borderColor);
         button.setBackground(drawable);
-        button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
+        button.setTextColor(currentSkin.textColor);
         button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
