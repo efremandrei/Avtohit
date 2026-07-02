@@ -114,7 +114,6 @@ public final class MainActivity extends Activity {
         }
     };
 
-    private TextView projectMode;
     private TextView visualChip;
     private TextView audioChip;
     private TextView exportChip;
@@ -220,7 +219,6 @@ public final class MainActivity extends Activity {
     }
 
     private void bindViews() {
-        projectMode = findViewById(R.id.projectMode);
         visualChip = findViewById(R.id.visualChip);
         audioChip = findViewById(R.id.audioChip);
         exportChip = findViewById(R.id.exportChip);
@@ -467,16 +465,7 @@ public final class MainActivity extends Activity {
         exportChip.setText(exportSummary);
 
         if (audioUri == null && visualUri == null) {
-            projectMode.setText(R.string.project_mode_default);
             status.setText(R.string.empty_project_status);
-        } else if (visualUri == null) {
-            projectMode.setText(R.string.no_visual_preview);
-        } else if (audioUri == null) {
-            projectMode.setText(R.string.no_audio_preview);
-        } else if (visualIsVideo) {
-            projectMode.setText(R.string.visual_video_meta);
-        } else if (visualUri != null) {
-            projectMode.setText(R.string.visual_image_meta);
         }
     }
 
@@ -1068,7 +1057,6 @@ public final class MainActivity extends Activity {
         styleCard(previewCard, currentSkin.surfaceColor);
         styleIconButton(overflowMenuButton);
 
-        projectMode.setTextColor(currentSkin.textColor);
         previewTitle.setTextColor(currentSkin.textColor);
 
         updateSystemBars();
