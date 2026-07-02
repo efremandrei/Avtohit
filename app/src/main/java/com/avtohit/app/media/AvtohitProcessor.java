@@ -25,6 +25,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class AvtohitProcessor {
+    private static final long STALE_WORK_FILE_AGE_MS = 6L * 60L * 60L * 1000L;
+
     public enum VisualKind {
         IMAGE,
         VIDEO
@@ -64,18 +66,27 @@ public final class AvtohitProcessor {
             long targetDurationMs,
             ProgressListener progressListener
     ) throws IOException, AvtohitException {
+        if (audioUri == null || visualUri == null || destinationUri == null) {
+            throw new AvtohitException("Audio, visual, and output targets must all be selected.");
+        }
+        if (targetDurationMs <= 0L) {
+            throw new AvtohitException("Selected MP3 has no readable duration.");
+        }
+
         ContentResolver resolver = context.getContentResolver();
         File workDir = new File(context.getCacheDir(), "avtohit");
         if (!workDir.exists() && !workDir.mkdirs()) {
             throw new IOException("Could not create AVTOHIT cache directory.");
         }
 
+        pruneStaleWorkFiles(workDir);
         long runId = System.currentTimeMillis();
         File audioFile = new File(workDir, "audio-" + runId + ".mp3");
         File visualFile = new File(workDir, "visual-" + runId + "." + visualExtension(resolver, visualUri, visualMimeType));
         File outputFile = new File(workDir, "output-" + runId + ".mp4");
 
         try {
+            // Work from cache copies so SAF streams stay stable for FFmpeg and never leak raw provider paths.
             copyUriToFile(resolver, audioUri, audioFile);
             copyUriToFile(resolver, visualUri, visualFile);
 
@@ -92,6 +103,9 @@ public final class AvtohitProcessor {
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
                 throw new AvtohitException("FFmpeg failed: " + session.getOutput() + "\n" + session.getFailStackTrace());
             }
+            if (!outputFile.exists() || outputFile.length() <= 0L) {
+                throw new IOException("Merged video file was not created.");
+            }
 
             copyFileToUri(resolver, outputFile, destinationUri);
             return new Result(visualKind, videoReencoded, outputFile.length(), session.getOutput());
@@ -103,9 +117,14 @@ public final class AvtohitProcessor {
     }
 
     public static String displayName(Context context, Uri uri) {
-        Cursor cursor = context.getContentResolver().query(uri, null, null, null, null);
+        Cursor cursor;
+        try {
+            cursor = context.getContentResolver().query(uri, null, null, null, null);
+        } catch (RuntimeException ignored) {
+            cursor = null;
+        }
         if (cursor == null) {
-            return uri.getLastPathSegment();
+            return fallbackName(uri);
         }
         try {
             int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
@@ -115,7 +134,7 @@ public final class AvtohitProcessor {
                     return value;
                 }
             }
-            return uri.getLastPathSegment();
+            return fallbackName(uri);
         } finally {
             cursor.close();
         }
@@ -142,7 +161,11 @@ public final class AvtohitProcessor {
             throw new IOException("Render interrupted.", error);
         }
 
-        return sessionRef.get();
+        FFmpegSession session = sessionRef.get();
+        if (session == null) {
+            throw new IOException("FFmpeg session finished without a result.");
+        }
+        return session;
     }
 
     private static void publishProgress(Statistics statistics, long targetDurationMs, ProgressListener progressListener) {
@@ -199,6 +222,7 @@ public final class AvtohitProcessor {
         List<String> args = baseArgs();
         args.add("-fflags");
         args.add("+genpts");
+        // Loop the visual input forever and let -shortest trim the output exactly to the MP3 length.
         args.add("-stream_loop");
         args.add("-1");
         args.add("-i");
@@ -254,7 +278,10 @@ public final class AvtohitProcessor {
         if (path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") || path.endsWith(".webp")) {
             return VisualKind.IMAGE;
         }
-        if (path.endsWith(".mp4") || path.endsWith(".mov") || path.endsWith(".m4v") || path.endsWith(".webm")) {
+        if (path.endsWith(".heic") || path.endsWith(".heif")) {
+            return VisualKind.IMAGE;
+        }
+        if (path.endsWith(".mp4") || path.endsWith(".mov") || path.endsWith(".m4v") || path.endsWith(".webm") || path.endsWith(".3gp")) {
             return VisualKind.VIDEO;
         }
         throw new AvtohitException("Selected visual file is not a supported picture or video.");
@@ -314,13 +341,34 @@ public final class AvtohitProcessor {
         byte[] buffer = new byte[1024 * 256];
         int read;
         while ((read = input.read(buffer)) != -1) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new IOException("Render interrupted.");
+            }
             output.write(buffer, 0, read);
         }
         output.flush();
     }
 
+    private static void pruneStaleWorkFiles(File workDir) {
+        File[] files = workDir.listFiles();
+        if (files == null) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - STALE_WORK_FILE_AGE_MS;
+        for (File file : files) {
+            if (file != null && file.isFile() && file.lastModified() < cutoff) {
+                deleteIfExists(file);
+            }
+        }
+    }
+
+    private static String fallbackName(Uri uri) {
+        String path = uri != null ? uri.getLastPathSegment() : null;
+        return (path == null || path.trim().isEmpty()) ? "selected-file" : path;
+    }
+
     private static void deleteIfExists(File file) {
-        if (file.exists() && !file.delete()) {
+        if (file != null && file.exists() && !file.delete()) {
             file.deleteOnExit();
         }
     }

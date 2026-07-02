@@ -2,6 +2,7 @@ package com.avtohit.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
@@ -15,12 +16,10 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.InputType;
 import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -40,6 +39,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_AUDIO = 1001;
@@ -47,11 +47,22 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_OUTPUT = 1003;
     private static final String PREFS_NAME = "avtohit_settings";
     private static final String PREF_SKIN = "app_skin";
+    private static final String STATE_AUDIO_URI = "audio_uri";
+    private static final String STATE_AUDIO_NAME = "audio_name";
+    private static final String STATE_AUDIO_DURATION = "audio_duration";
+    private static final String STATE_VISUAL_URI = "visual_uri";
+    private static final String STATE_VISUAL_MIME = "visual_mime";
+    private static final String STATE_VISUAL_NAME = "visual_name";
+    private static final String STATE_VISUAL_IS_VIDEO = "visual_is_video";
+    private static final String STATE_VISUAL_DURATION = "visual_duration";
+    private static final String STATE_EXPORT_PROFILE = "export_profile";
+    private static final String STATE_FRAME_RATE = "frame_rate";
+    private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
 
     private enum AppSkin {
-        LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFF5D6662, 0xFFD5DDD8, true),
-        FOREST("forest", "Forest", 0xFFEAF3EF, 0xFFF9FCFA, 0xFFE2ECE7, 0xFF17342B, 0xFF567065, 0xFFC8D9D0, true),
-        NIGHT("night", "Night", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF9FB1A9, 0xFF31403A, false);
+        LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFFD5DDD8, true),
+        FOREST("forest", "Forest", 0xFFEAF3EF, 0xFFF9FCFA, 0xFFE2ECE7, 0xFF17342B, 0xFFC8D9D0, true),
+        NIGHT("night", "Night", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF31403A, false);
 
         final String key;
         final String label;
@@ -59,18 +70,16 @@ public final class MainActivity extends Activity {
         final int surfaceColor;
         final int surfaceAltColor;
         final int textColor;
-        final int mutedColor;
         final int borderColor;
         final boolean lightStatusBar;
 
-        AppSkin(String key, String label, int backgroundColor, int surfaceColor, int surfaceAltColor, int textColor, int mutedColor, int borderColor, boolean lightStatusBar) {
+        AppSkin(String key, String label, int backgroundColor, int surfaceColor, int surfaceAltColor, int textColor, int borderColor, boolean lightStatusBar) {
             this.key = key;
             this.label = label;
             this.backgroundColor = backgroundColor;
             this.surfaceColor = surfaceColor;
             this.surfaceAltColor = surfaceAltColor;
             this.textColor = textColor;
-            this.mutedColor = mutedColor;
             this.borderColor = borderColor;
             this.lightStatusBar = lightStatusBar;
         }
@@ -137,6 +146,7 @@ public final class MainActivity extends Activity {
     private int frameRate = 30;
     private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
+    private volatile boolean activityActive = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -145,6 +155,7 @@ public final class MainActivity extends Activity {
 
         bindViews();
         currentSkin = readSavedSkin();
+        restoreState(savedInstanceState);
         applyTopInset();
         applySkin();
         bindActions();
@@ -152,10 +163,33 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStop() {
+        super.onStop();
+        pausePreview();
+    }
+
+    @Override
     protected void onDestroy() {
-        super.onDestroy();
+        activityActive = false;
+        mainHandler.removeCallbacksAndMessages(null);
         releasePreviewPlayer();
-        executor.shutdownNow();
+        executor.shutdown();
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_AUDIO_URI, audioUri != null ? audioUri.toString() : null);
+        outState.putString(STATE_AUDIO_NAME, audioDisplayName);
+        outState.putLong(STATE_AUDIO_DURATION, audioDurationMs);
+        outState.putString(STATE_VISUAL_URI, visualUri != null ? visualUri.toString() : null);
+        outState.putString(STATE_VISUAL_MIME, visualMimeType);
+        outState.putString(STATE_VISUAL_NAME, visualDisplayName);
+        outState.putBoolean(STATE_VISUAL_IS_VIDEO, visualIsVideo);
+        outState.putLong(STATE_VISUAL_DURATION, visualDurationMs);
+        outState.putString(STATE_EXPORT_PROFILE, exportProfile.label);
+        outState.putInt(STATE_FRAME_RATE, frameRate);
     }
 
     @Override
@@ -168,19 +202,10 @@ public final class MainActivity extends Activity {
         Uri uri = data.getData();
         if (requestCode == REQUEST_AUDIO) {
             takeReadPermission(data, uri);
-            audioUri = uri;
-            audioDisplayName = AvtohitProcessor.displayName(this, uri);
-            audioDurationMs = readDuration(uri);
-            releasePreviewPlayer();
-            status.setText(R.string.ready);
+            handleAudioSelection(uri);
         } else if (requestCode == REQUEST_VISUAL) {
             takeReadPermission(data, uri);
-            visualUri = uri;
-            visualMimeType = getContentResolver().getType(uri);
-            visualDisplayName = AvtohitProcessor.displayName(this, uri);
-            visualIsVideo = isVideoVisual(uri, visualMimeType);
-            visualDurationMs = visualIsVideo ? readDuration(uri) : 0L;
-            status.setText(R.string.ready);
+            handleVisualSelection(uri);
         } else if (requestCode == REQUEST_OUTPUT) {
             takeWritePermission(data, uri);
             renderTo(uri);
@@ -244,12 +269,104 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void restoreState(Bundle savedInstanceState) {
+        if (savedInstanceState == null) {
+            return;
+        }
+
+        // Persisted document permissions let us rebuild the working state after rotation or process recreation.
+        audioUri = parseUri(savedInstanceState.getString(STATE_AUDIO_URI));
+        audioDisplayName = savedInstanceState.getString(STATE_AUDIO_NAME);
+        audioDurationMs = savedInstanceState.getLong(STATE_AUDIO_DURATION, 0L);
+        visualUri = parseUri(savedInstanceState.getString(STATE_VISUAL_URI));
+        visualMimeType = savedInstanceState.getString(STATE_VISUAL_MIME);
+        visualDisplayName = savedInstanceState.getString(STATE_VISUAL_NAME);
+        visualIsVideo = savedInstanceState.getBoolean(STATE_VISUAL_IS_VIDEO, false);
+        visualDurationMs = savedInstanceState.getLong(STATE_VISUAL_DURATION, 0L);
+        exportProfile = exportProfileFromLabel(savedInstanceState.getString(STATE_EXPORT_PROFILE));
+        frameRate = savedInstanceState.getInt(STATE_FRAME_RATE, frameRate);
+    }
+
+    private void handleAudioSelection(Uri uri) {
+        String mimeType = getContentResolver().getType(uri);
+        String displayName = AvtohitProcessor.displayName(this, uri);
+        if (!isSupportedMp3(mimeType, displayName, uri)) {
+            clearAudioSelection();
+            status.setText(R.string.audio_must_be_mp3);
+            return;
+        }
+
+        long durationMs = readDuration(uri);
+        if (durationMs <= 0L) {
+            clearAudioSelection();
+            status.setText(R.string.audio_duration_unavailable);
+            return;
+        }
+
+        audioUri = uri;
+        audioDisplayName = displayName;
+        audioDurationMs = durationMs;
+        releasePreviewPlayer();
+        status.setText(R.string.ready);
+    }
+
+    private void handleVisualSelection(Uri uri) {
+        String mimeType = getContentResolver().getType(uri);
+        if (!isSupportedVisual(mimeType, uri)) {
+            clearVisualSelection();
+            status.setText(R.string.visual_type_unsupported);
+            return;
+        }
+
+        visualUri = uri;
+        visualMimeType = mimeType;
+        visualDisplayName = AvtohitProcessor.displayName(this, uri);
+        visualIsVideo = isVideoVisual(uri, visualMimeType);
+        visualDurationMs = visualIsVideo ? readDuration(uri) : 0L;
+        status.setText(R.string.ready);
+    }
+
+    private void clearAudioSelection() {
+        audioUri = null;
+        audioDisplayName = null;
+        audioDurationMs = 0L;
+        releasePreviewPlayer();
+    }
+
+    private void clearVisualSelection() {
+        visualUri = null;
+        visualMimeType = null;
+        visualDisplayName = null;
+        visualIsVideo = false;
+        visualDurationMs = 0L;
+    }
+
+    private void launchPicker(Intent intent, int requestCode, int errorResId) {
+        try {
+            startActivityForResult(intent, requestCode);
+        } catch (ActivityNotFoundException | SecurityException error) {
+            status.setText(errorResId);
+        }
+    }
+
+    private void postToUiIfAlive(Runnable action) {
+        if (!activityActive) {
+            return;
+        }
+        mainHandler.post(() -> {
+            if (!activityActive || isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && isDestroyed())) {
+                return;
+            }
+            action.run();
+        });
+    }
+
     private void openAudioPicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("audio/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"audio/mpeg", "audio/mp3", "audio/x-mpeg"});
-        startActivityForResult(intent, REQUEST_AUDIO);
+        launchPicker(intent, REQUEST_AUDIO, R.string.audio_picker_unavailable);
     }
 
     private void openVisualPicker() {
@@ -257,7 +374,7 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
-        startActivityForResult(intent, REQUEST_VISUAL);
+        launchPicker(intent, REQUEST_VISUAL, R.string.visual_picker_unavailable);
     }
 
     private void openOutputPicker() {
@@ -265,15 +382,21 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("video/mp4");
         intent.putExtra(Intent.EXTRA_TITLE, defaultOutputName());
-        startActivityForResult(intent, REQUEST_OUTPUT);
+        launchPicker(intent, REQUEST_OUTPUT, R.string.output_picker_unavailable);
     }
 
     private void renderTo(Uri destinationUri) {
+        if (audioUri == null || visualUri == null) {
+            status.setText(R.string.select_media_before_export);
+            return;
+        }
+
         setRendering(true);
         releasePreviewPlayer();
         status.setText(R.string.creating);
         progress.setProgress(0);
 
+        // Render settings are snapshotted here so a dialog change cannot mutate an in-flight job.
         Uri selectedAudio = audioUri;
         Uri selectedVisual = visualUri;
         String selectedVisualMime = visualMimeType;
@@ -281,24 +404,29 @@ public final class MainActivity extends Activity {
         int selectedFrameRate = frameRate;
         long selectedAudioDurationMs = audioDurationMs;
 
-        executor.submit(() -> {
-            try {
-                AvtohitProcessor.Result result = processor.render(
-                        getApplicationContext(),
-                        selectedAudio,
-                        selectedVisual,
-                        selectedVisualMime,
-                        destinationUri,
-                        selectedProfile,
-                        selectedFrameRate,
-                        selectedAudioDurationMs,
-                        (currentMs, totalMs) -> mainHandler.post(() -> updateRenderProgress(currentMs, totalMs))
-                );
-                mainHandler.post(() -> onRenderSuccess(result));
-            } catch (IOException | AvtohitException | RuntimeException error) {
-                mainHandler.post(() -> onRenderFailure(error));
-            }
-        });
+        try {
+            executor.submit(() -> {
+                try {
+                    AvtohitProcessor.Result result = processor.render(
+                            getApplicationContext(),
+                            selectedAudio,
+                            selectedVisual,
+                            selectedVisualMime,
+                            destinationUri,
+                            selectedProfile,
+                            selectedFrameRate,
+                            selectedAudioDurationMs,
+                            (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
+                    );
+                    postToUiIfAlive(() -> onRenderSuccess(result));
+                } catch (IOException | AvtohitException | RuntimeException error) {
+                    postToUiIfAlive(() -> onRenderFailure(error));
+                }
+            });
+        } catch (RejectedExecutionException error) {
+            setRendering(false);
+            status.setText(R.string.render_unavailable);
+        }
     }
 
     private void onRenderSuccess(AvtohitProcessor.Result result) {
@@ -480,14 +608,19 @@ public final class MainActivity extends Activity {
             playButton.setContentDescription(getString(R.string.pause_button));
             mainHandler.removeCallbacks(previewTicker);
             mainHandler.post(previewTicker);
-        } catch (IOException error) {
+        } catch (IOException | IllegalStateException | SecurityException error) {
+            releasePreviewPlayer();
             status.setText(getString(R.string.failed_detail, safeMessage(error)));
         }
     }
 
     private void pausePreview() {
-        if (previewPlayer != null && previewPlayer.isPlaying()) {
-            previewPlayer.pause();
+        try {
+            if (previewPlayer != null && previewPlayer.isPlaying()) {
+                previewPlayer.pause();
+            }
+        } catch (RuntimeException ignored) {
+            // Ignore best-effort preview cleanup failures.
         }
         previewPlaying = false;
         playButton.setImageResource(android.R.drawable.ic_media_play);
@@ -498,7 +631,11 @@ public final class MainActivity extends Activity {
     private void releasePreviewPlayer() {
         pausePreview();
         if (previewPlayer != null) {
-            previewPlayer.release();
+            try {
+                previewPlayer.release();
+            } catch (RuntimeException ignored) {
+                // Ignore preview release failures during teardown.
+            }
             previewPlayer = null;
         }
     }
@@ -568,8 +705,12 @@ public final class MainActivity extends Activity {
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
             try {
                 retriever.setDataSource(this, visualUri);
+                int targetSize = previewTargetSize();
+                if (android.os.Build.VERSION.SDK_INT >= 27) {
+                    return retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, targetSize, targetSize);
+                }
                 return retriever.getFrameAtTime(0L);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException | OutOfMemoryError ignored) {
                 return null;
             } finally {
                 try {
@@ -580,12 +721,9 @@ public final class MainActivity extends Activity {
             }
         }
 
-        try (InputStream input = getContentResolver().openInputStream(visualUri)) {
-            if (input == null) {
-                return null;
-            }
-            return BitmapFactory.decodeStream(input);
-        } catch (IOException ignored) {
+        try {
+            return decodeSampledImage(visualUri, previewTargetSize(), previewTargetSize());
+        } catch (IOException | OutOfMemoryError ignored) {
             return null;
         }
     }
@@ -659,10 +797,106 @@ public final class MainActivity extends Activity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private void setViewWidth(View view, int widthPx) {
-        android.view.ViewGroup.LayoutParams params = view.getLayoutParams();
-        params.width = widthPx;
-        view.setLayoutParams(params);
+    private int previewTargetSize() {
+        int displayWidth = getResources().getDisplayMetrics().widthPixels;
+        return Math.min(MAX_PREVIEW_BITMAP_SIZE, Math.max(displayWidth, dp(320)));
+    }
+
+    private Bitmap decodeSampledImage(Uri uri, int requestedWidth, int requestedHeight) throws IOException {
+        BitmapFactory.Options boundsOptions = new BitmapFactory.Options();
+        boundsOptions.inJustDecodeBounds = true;
+        try (InputStream boundsStream = getContentResolver().openInputStream(uri)) {
+            if (boundsStream == null) {
+                throw new IOException("Could not open selected image preview.");
+            }
+            BitmapFactory.decodeStream(boundsStream, null, boundsOptions);
+        }
+
+        BitmapFactory.Options decodeOptions = new BitmapFactory.Options();
+        decodeOptions.inSampleSize = calculateInSampleSize(boundsOptions, requestedWidth, requestedHeight);
+        decodeOptions.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        try (InputStream decodeStream = getContentResolver().openInputStream(uri)) {
+            if (decodeStream == null) {
+                throw new IOException("Could not open selected image preview.");
+            }
+            return BitmapFactory.decodeStream(decodeStream, null, decodeOptions);
+        }
+    }
+
+    private static int calculateInSampleSize(BitmapFactory.Options options, int requestedWidth, int requestedHeight) {
+        int sampleSize = 1;
+        int width = Math.max(1, options.outWidth);
+        int height = Math.max(1, options.outHeight);
+        while ((width / sampleSize) > requestedWidth * 2 || (height / sampleSize) > requestedHeight * 2) {
+            sampleSize *= 2;
+        }
+        return Math.max(1, sampleSize);
+    }
+
+    private static Uri parseUri(String rawUri) {
+        if (rawUri == null || rawUri.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Uri.parse(rawUri);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static ExportProfile exportProfileFromLabel(String label) {
+        if (ExportProfile.P720.label.equals(label)) {
+            return ExportProfile.P720;
+        }
+        if (ExportProfile.P4K.label.equals(label)) {
+            return ExportProfile.P4K;
+        }
+        return ExportProfile.P1080;
+    }
+
+    private boolean isSupportedMp3(String mimeType, String displayName, Uri uri) {
+        String source = firstNonBlank(mimeType, displayName, uri.toString());
+        if (source == null) {
+            return false;
+        }
+        String normalized = source.toLowerCase(Locale.US);
+        return normalized.contains("audio/mpeg")
+                || normalized.contains("audio/mp3")
+                || normalized.contains("audio/x-mpeg")
+                || normalized.endsWith(".mp3");
+    }
+
+    private boolean isSupportedVisual(String mimeType, Uri uri) {
+        String source = firstNonBlank(mimeType, uri.toString());
+        if (source == null) {
+            return false;
+        }
+        String normalized = source.toLowerCase(Locale.US);
+        return normalized.startsWith("image/")
+                || normalized.startsWith("video/")
+                || normalized.endsWith(".jpg")
+                || normalized.endsWith(".jpeg")
+                || normalized.endsWith(".png")
+                || normalized.endsWith(".webp")
+                || normalized.endsWith(".heic")
+                || normalized.endsWith(".heif")
+                || normalized.endsWith(".mp4")
+                || normalized.endsWith(".mov")
+                || normalized.endsWith(".m4v")
+                || normalized.endsWith(".webm")
+                || normalized.endsWith(".3gp");
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String defaultOutputName() {
@@ -762,14 +996,6 @@ public final class MainActivity extends Activity {
         view.setBackground(drawable);
     }
 
-    private void styleSurface(View view, int fillColor, int radiusDp) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fillColor);
-        drawable.setCornerRadius(dp(radiusDp));
-        drawable.setStroke(dp(1), currentSkin.borderColor);
-        view.setBackground(drawable);
-    }
-
     private void updateSystemBars() {
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(currentSkin.backgroundColor);
@@ -792,7 +1018,6 @@ public final class MainActivity extends Activity {
         int surfaceColor = darkDialog ? currentSkin.surfaceColor : Color.WHITE;
         int summaryColor = darkDialog ? currentSkin.surfaceAltColor : 0xFFF4F6F4;
         int textColor = darkDialog ? currentSkin.textColor : 0xFF151817;
-        int mutedColor = darkDialog ? currentSkin.mutedColor : 0xFF5D6662;
         int borderColor = darkDialog ? currentSkin.borderColor : 0xFFD5DDD8;
 
         if (dialog.getWindow() != null) {
@@ -807,7 +1032,7 @@ public final class MainActivity extends Activity {
 
         View content = dialogView.findViewById(R.id.exportDialogContent);
         content.setBackgroundColor(surfaceColor);
-        styleTextInputs(dialogView, textColor, mutedColor);
+        styleTextInputs(dialogView, textColor);
 
         View exportSummary = dialogView.findViewById(R.id.exportSummary);
         GradientDrawable summaryDrawable = new GradientDrawable();
@@ -821,7 +1046,7 @@ public final class MainActivity extends Activity {
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
     }
 
-    private void styleTextInputs(View root, int textColor, int mutedColor) {
+    private void styleTextInputs(View root, int textColor) {
         if (root instanceof TextView) {
             TextView textView = (TextView) root;
             textView.setTextColor(textColor);
@@ -832,7 +1057,7 @@ public final class MainActivity extends Activity {
         if (root instanceof android.view.ViewGroup) {
             android.view.ViewGroup group = (android.view.ViewGroup) root;
             for (int i = 0; i < group.getChildCount(); i++) {
-                styleTextInputs(group.getChildAt(i), textColor, mutedColor);
+                styleTextInputs(group.getChildAt(i), textColor);
             }
         }
     }

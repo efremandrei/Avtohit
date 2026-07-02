@@ -5,7 +5,6 @@
     <string name="project_mode_default">Add an image or short video, then layer your MP3.</string>
     <string name="select_mp3">Add Audio</string>
     <string name="select_visual">Add Video/Image</string>
-    <string name="open_settings">Settings</string>
     <string name="preview_title">Preview</string>
     <string name="timeline_title">Timeline</string>
     <string name="timeline_hint">Visual duration snaps to the audio length on export.</string>
@@ -62,6 +61,13 @@
     <string name="settings_status_saved">Settings saved: %1$s skin, %2$s at %3$d fps</string>
     <string name="project_cleared">Project cleared</string>
     <string name="audio_preview_unavailable">Add an MP3 to preview playback.</string>
+    <string name="audio_must_be_mp3">Select an MP3 file.</string>
+    <string name="audio_duration_unavailable">The selected MP3 duration could not be read.</string>
+    <string name="visual_type_unsupported">Select a supported image or short video.</string>
+    <string name="audio_picker_unavailable">This device cannot open the audio picker.</string>
+    <string name="visual_picker_unavailable">This device cannot open the image/video picker.</string>
+    <string name="output_picker_unavailable">This device cannot create the output video file.</string>
+    <string name="render_unavailable">Could not start the merge. Reopen the app and try again.</string>
     <string name="select_media_before_export">Add audio and a video or image before merging.</string>
     <string name="visual_track_clip">%1$s</string>
     <string name="audio_track_clip">%1$s</string>
