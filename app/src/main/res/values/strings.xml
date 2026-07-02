@@ -16,6 +16,12 @@
     <string name="summary_visual">Visual</string>
     <string name="summary_audio">Audio</string>
     <string name="summary_export">Export</string>
+    <string name="status_needed">Needed</string>
+    <string name="duration_value">Duration: %1$s</string>
+    <string name="visual_choose_line">Choose a picture or short video</string>
+    <string name="visual_image_duration_line">Image fills the MP3 length</string>
+    <string name="audio_choose_line">Choose an MP3 soundtrack</string>
+    <string name="export_output_line">Output: choose when merging</string>
     <string name="export_button">Merge To Video</string>
     <string name="back_button">Back</string>
     <string name="play_button">Play preview audio</string>

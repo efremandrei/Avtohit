@@ -61,10 +61,14 @@ public final class MainActivity extends Activity {
     private static final String STATE_EXPORT_PROFILE = "export_profile";
     private static final String STATE_FRAME_RATE = "frame_rate";
     private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
+    private static final int POSITIVE_READY_LIGHT = 0xFF12664F;
+    private static final int POSITIVE_READY_DARK = 0xFF74D7B5;
+    private static final int NEGATIVE_NEEDED_LIGHT = 0xFFA63C36;
+    private static final int NEGATIVE_NEEDED_DARK = 0xFFFF9A90;
 
     private enum AppSkin {
-        LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFFD5DDD8, true),
-        DARK("dark", "Dark", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFF31403A, false);
+        LIGHT("light", "Light", 0xFFF7F8F5, 0xFFFFFFFF, 0xFFEEF3EF, 0xFF151817, 0xFF5D6662, 0xFFD5DDD8, true),
+        DARK("dark", "Dark", 0xFF111615, 0xFF1B2421, 0xFF24302B, 0xFFF3F7F5, 0xFFB8C5BE, 0xFF31403A, false);
 
         final String key;
         final String label;
@@ -72,16 +76,18 @@ public final class MainActivity extends Activity {
         final int surfaceColor;
         final int surfaceAltColor;
         final int textColor;
+        final int mutedColor;
         final int borderColor;
         final boolean lightStatusBar;
 
-        AppSkin(String key, String label, int backgroundColor, int surfaceColor, int surfaceAltColor, int textColor, int borderColor, boolean lightStatusBar) {
+        AppSkin(String key, String label, int backgroundColor, int surfaceColor, int surfaceAltColor, int textColor, int mutedColor, int borderColor, boolean lightStatusBar) {
             this.key = key;
             this.label = label;
             this.backgroundColor = backgroundColor;
             this.surfaceColor = surfaceColor;
             this.surfaceAltColor = surfaceAltColor;
             this.textColor = textColor;
+            this.mutedColor = mutedColor;
             this.borderColor = borderColor;
             this.lightStatusBar = lightStatusBar;
         }
@@ -122,6 +128,12 @@ public final class MainActivity extends Activity {
     private TextView visualChip;
     private TextView audioChip;
     private TextView exportChip;
+    private TextView visualDurationLine;
+    private TextView audioDurationLine;
+    private TextView exportOutputLine;
+    private TextView visualReadiness;
+    private TextView audioReadiness;
+    private TextView exportReadiness;
     private TextView previewEmptyState;
     private TextView previewModeLabel;
     private TextView previewTime;
@@ -229,6 +241,12 @@ public final class MainActivity extends Activity {
         visualChip = findViewById(R.id.visualChip);
         audioChip = findViewById(R.id.audioChip);
         exportChip = findViewById(R.id.exportChip);
+        visualDurationLine = findViewById(R.id.visualDurationLine);
+        audioDurationLine = findViewById(R.id.audioDurationLine);
+        exportOutputLine = findViewById(R.id.exportOutputLine);
+        visualReadiness = findViewById(R.id.visualReadiness);
+        audioReadiness = findViewById(R.id.audioReadiness);
+        exportReadiness = findViewById(R.id.exportReadiness);
         previewArtwork = findViewById(R.id.previewArtwork);
         previewEmptyState = findViewById(R.id.previewEmptyState);
         previewModeLabel = findViewById(R.id.previewModeLabel);
@@ -467,15 +485,48 @@ public final class MainActivity extends Activity {
     private void refreshProjectHeader() {
         String visualSummary = visualDisplayName != null ? visualDisplayName : getString(R.string.visual_not_selected);
         String audioSummary = audioDisplayName != null ? audioDisplayName : getString(R.string.mp3_not_selected);
-        String exportSummary = exportProfile.label + " / " + frameRate + "fps";
+        String exportSummary = exportProfile.label + " - " + frameRate + "fps";
 
-        visualChip.setText(ellipsize(visualSummary, 20));
-        audioChip.setText(ellipsize(audioSummary, 20));
+        visualChip.setText(ellipsize(visualSummary, 40));
+        visualDurationLine.setText(visualDetailLine());
+        audioChip.setText(ellipsize(audioSummary, 40));
+        audioDurationLine.setText(audioDurationMs > 0L
+                ? getString(R.string.duration_value, formatDuration(audioDurationMs))
+                : getString(R.string.audio_choose_line));
         exportChip.setText(exportSummary);
+        exportOutputLine.setText(R.string.export_output_line);
+        styleReadinessLabels();
 
         if (audioUri == null && visualUri == null) {
             status.setText(R.string.empty_project_status);
         }
+    }
+
+    private String visualDetailLine() {
+        if (visualUri == null) {
+            return getString(R.string.visual_choose_line);
+        }
+        if (visualIsVideo && visualDurationMs > 0L) {
+            return getString(R.string.duration_value, formatDuration(visualDurationMs));
+        }
+        if (!visualIsVideo && audioDurationMs > 0L) {
+            return getString(R.string.duration_value, formatDuration(audioDurationMs));
+        }
+        return getString(R.string.visual_image_duration_line);
+    }
+
+    private void styleReadinessLabels() {
+        styleReadinessLabel(visualReadiness, visualUri != null);
+        styleReadinessLabel(audioReadiness, audioUri != null);
+        styleReadinessLabel(exportReadiness, true);
+    }
+
+    private void styleReadinessLabel(TextView label, boolean ready) {
+        if (label == null) {
+            return;
+        }
+        label.setText(ready ? R.string.ready : R.string.status_needed);
+        label.setTextColor(ready ? readyColor() : neededColor());
     }
 
     private void refreshPreview() {
@@ -1061,6 +1112,13 @@ public final class MainActivity extends Activity {
         styleIconButton(overflowMenuButton);
 
         styleTextInputs(projectSummaryCard, currentSkin.textColor);
+        styleSecondaryText(visualChip);
+        styleSecondaryText(visualDurationLine);
+        styleSecondaryText(audioChip);
+        styleSecondaryText(audioDurationLine);
+        styleSecondaryText(exportChip);
+        styleSecondaryText(exportOutputLine);
+        styleReadinessLabels();
         summaryDividerOne.setBackgroundColor(currentSkin.borderColor);
         summaryDividerTwo.setBackgroundColor(currentSkin.borderColor);
         previewTitle.setTextColor(currentSkin.textColor);
@@ -1087,6 +1145,20 @@ public final class MainActivity extends Activity {
         button.setBackground(drawable);
         button.setImageTintList(ColorStateList.valueOf(currentSkin.textColor));
         button.setAlpha(button.isEnabled() ? 1f : 0.55f);
+    }
+
+    private void styleSecondaryText(TextView textView) {
+        if (textView != null) {
+            textView.setTextColor(currentSkin.mutedColor);
+        }
+    }
+
+    private int readyColor() {
+        return currentSkin == AppSkin.DARK ? POSITIVE_READY_DARK : POSITIVE_READY_LIGHT;
+    }
+
+    private int neededColor() {
+        return currentSkin == AppSkin.DARK ? NEGATIVE_NEEDED_DARK : NEGATIVE_NEEDED_LIGHT;
     }
 
     private void updateSystemBars() {
