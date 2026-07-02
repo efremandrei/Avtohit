@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -16,6 +17,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.method.LinkMovementMethod;
 import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -518,6 +520,13 @@ public final class MainActivity extends Activity {
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         RadioGroup skinGroup = dialogView.findViewById(R.id.skinGroup);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
+        TextView aboutVersion = dialogView.findViewById(R.id.aboutVersion);
+        TextView aboutEmail = dialogView.findViewById(R.id.aboutEmail);
+        TextView aboutGithub = dialogView.findViewById(R.id.aboutGithub);
+
+        aboutVersion.setText(aboutVersionSummary());
+        aboutEmail.setMovementMethod(LinkMovementMethod.getInstance());
+        aboutGithub.setMovementMethod(LinkMovementMethod.getInstance());
 
         if (exportProfile == ExportProfile.P720) {
             resolutionGroup.check(R.id.resolution720);
@@ -907,6 +916,33 @@ public final class MainActivity extends Activity {
         return "AVTOHIT-" + timestamp + ".mp4";
     }
 
+    private String aboutVersionSummary() {
+        try {
+            PackageInfo packageInfo;
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                packageInfo = getPackageManager().getPackageInfo(
+                        getPackageName(),
+                        android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                );
+            } else {
+                packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            }
+
+            String versionName = firstNonBlank(packageInfo.versionName, "0.0.0");
+            long versionCode = android.os.Build.VERSION.SDK_INT >= 28
+                    ? packageInfo.getLongVersionCode()
+                    : packageInfo.versionCode;
+            String buildLabel = isDebugBuild() ? "debug" : "release";
+            return getString(R.string.about_version_value, versionName, versionCode, buildLabel);
+        } catch (Exception ignored) {
+            return getString(R.string.about_version_value, "unknown", 0, "unknown");
+        }
+    }
+
+    private boolean isDebugBuild() {
+        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+    }
+
     private static String safeMessage(Throwable error) {
         String message = error.getMessage();
         if (message == null || message.trim().isEmpty()) {
@@ -1040,6 +1076,13 @@ public final class MainActivity extends Activity {
         summaryDrawable.setCornerRadius(dp(16));
         summaryDrawable.setStroke(dp(1), borderColor);
         exportSummary.setBackground(summaryDrawable);
+
+        View aboutSection = dialogView.findViewById(R.id.aboutSection);
+        GradientDrawable aboutDrawable = new GradientDrawable();
+        aboutDrawable.setColor(summaryColor);
+        aboutDrawable.setCornerRadius(dp(16));
+        aboutDrawable.setStroke(dp(1), borderColor);
+        aboutSection.setBackground(aboutDrawable);
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);

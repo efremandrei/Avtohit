@@ -44,6 +44,11 @@
     <string name="export_resolution_title">Resolution</string>
     <string name="export_fps_title">Frame rate</string>
     <string name="app_skin_title">Application skin</string>
+    <string name="about_title">About</string>
+    <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
+    <string name="about_developer_value">Developer: Andrei Efremushkin</string>
+    <string name="about_email_value">Email: andrei.efr@gmail.com</string>
+    <string name="about_github_value">GitHub: https://github.com/efremandrei/Avtohit</string>
     <string name="app_skin_light">Light</string>
     <string name="app_skin_forest">Forest</string>
     <string name="app_skin_night">Night</string>
