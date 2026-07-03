@@ -51,6 +51,7 @@
         </RadioGroup>
 
         <TextView
+            android:id="@+id/imageTimeTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
@@ -80,6 +81,34 @@
                 android:layout_height="wrap_content"
                 android:text="@string/export_fps_60" />
         </RadioGroup>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/image_time_title"
+            android:textColor="@color/avtohit_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/imageTimeValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/image_time_first_only"
+            android:textColor="@color/avtohit_muted"
+            android:textSize="13sp" />
+
+        <SeekBar
+            android:id="@+id/imageTimeSeek"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="60"
+            android:progress="0"
+            android:progressTint="@color/avtohit_positive"
+            android:thumbTint="@color/avtohit_positive" />
 
         <TextView
             android:id="@+id/exportSummary"

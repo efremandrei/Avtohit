@@ -15,9 +15,11 @@ import com.arthenica.ffmpegkit.Statistics;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.BufferedWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -113,6 +115,77 @@ public final class AvtohitProcessor {
             deleteIfExists(audioFile);
             deleteIfExists(visualFile);
             deleteIfExists(outputFile);
+        }
+    }
+
+    public Result renderImages(
+            Context context,
+            Uri audioUri,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            int slideSeconds,
+            ProgressListener progressListener
+    ) throws IOException, AvtohitException {
+        if (imageUris == null || imageUris.isEmpty()) {
+            throw new AvtohitException("At least one image must be selected.");
+        }
+        if (slideSeconds <= 0 || imageUris.size() == 1) {
+            return render(context, audioUri, imageUris.get(0), "image/*", destinationUri, exportProfile, frameRate, targetDurationMs, progressListener);
+        }
+        if (slideSeconds > 60) {
+            throw new AvtohitException("Image time must be between 0 and 60 seconds.");
+        }
+        if (audioUri == null || destinationUri == null) {
+            throw new AvtohitException("Audio and output targets must be selected.");
+        }
+        if (targetDurationMs <= 0L) {
+            throw new AvtohitException("Selected MP3 has no readable duration.");
+        }
+
+        ContentResolver resolver = context.getContentResolver();
+        File workDir = new File(context.getCacheDir(), "avtohit");
+        if (!workDir.exists() && !workDir.mkdirs()) {
+            throw new IOException("Could not create AVTOHIT cache directory.");
+        }
+
+        pruneStaleWorkFiles(workDir);
+        long runId = System.currentTimeMillis();
+        File audioFile = new File(workDir, "audio-" + runId + ".mp3");
+        File outputFile = new File(workDir, "output-" + runId + ".mp4");
+        File concatFile = new File(workDir, "images-" + runId + ".ffconcat");
+        ArrayList<File> imageFiles = new ArrayList<>();
+
+        try {
+            copyUriToFile(resolver, audioUri, audioFile);
+            for (int i = 0; i < imageUris.size(); i++) {
+                Uri imageUri = imageUris.get(i);
+                File imageFile = new File(workDir, "image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
+                copyUriToFile(resolver, imageUri, imageFile);
+                imageFiles.add(imageFile);
+            }
+
+            writeConcatFile(concatFile, imageFiles, targetDurationMs, slideSeconds);
+            FFmpegSession session = execute(buildSlideshowCommand(audioFile, concatFile, outputFile, exportProfile, frameRate, targetDurationMs), targetDurationMs, progressListener);
+
+            if (!ReturnCode.isSuccess(session.getReturnCode())) {
+                throw new AvtohitException("FFmpeg failed: " + session.getOutput() + "\n" + session.getFailStackTrace());
+            }
+            if (!outputFile.exists() || outputFile.length() <= 0L) {
+                throw new IOException("Merged video file was not created.");
+            }
+
+            copyFileToUri(resolver, outputFile, destinationUri);
+            return new Result(VisualKind.IMAGE, false, outputFile.length(), session.getOutput());
+        } finally {
+            deleteIfExists(audioFile);
+            deleteIfExists(outputFile);
+            deleteIfExists(concatFile);
+            for (File imageFile : imageFiles) {
+                deleteIfExists(imageFile);
+            }
         }
     }
 
@@ -248,6 +321,43 @@ public final class AvtohitProcessor {
         return args;
     }
 
+    private static List<String> buildSlideshowCommand(
+            File audioFile,
+            File concatFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs
+    ) {
+        List<String> args = baseArgs();
+        args.add("-f");
+        args.add("concat");
+        args.add("-safe");
+        args.add("0");
+        args.add("-i");
+        args.add(concatFile.getAbsolutePath());
+        args.add("-i");
+        args.add(audioFile.getAbsolutePath());
+        args.add("-map");
+        args.add("0:v:0");
+        args.add("-map");
+        args.add("1:a:0");
+        args.add("-t");
+        args.add(formatSeconds(targetDurationMs));
+        args.add("-vf");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-c:a");
+        args.add("copy");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
     private static List<String> baseArgs() {
         List<String> args = new ArrayList<>();
         args.add("-hide_banner");
@@ -260,6 +370,43 @@ public final class AvtohitProcessor {
                 + ",scale=" + exportProfile.width + ":" + exportProfile.height
                 + ":force_original_aspect_ratio=decrease,pad="
                 + exportProfile.width + ":" + exportProfile.height + ":(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p";
+    }
+
+    private static void writeConcatFile(File concatFile, List<File> imageFiles, long targetDurationMs, int slideSeconds) throws IOException {
+        long slideDurationMs = slideSeconds * 1000L;
+        long coveredMs = 0L;
+        int index = 0;
+        File lastFile = imageFiles.get(0);
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(concatFile))) {
+            writer.write("ffconcat version 1.0\n");
+            while (coveredMs < targetDurationMs + slideDurationMs) {
+                File imageFile = imageFiles.get(index % imageFiles.size());
+                writeConcatImage(writer, imageFile, slideSeconds);
+                lastFile = imageFile;
+                coveredMs += slideDurationMs;
+                index++;
+            }
+            writer.write("file ");
+            writer.write(concatFilePath(lastFile));
+            writer.write('\n');
+        }
+    }
+
+    private static void writeConcatImage(BufferedWriter writer, File imageFile, int slideSeconds) throws IOException {
+        writer.write("file ");
+        writer.write(concatFilePath(imageFile));
+        writer.write('\n');
+        writer.write("duration ");
+        writer.write(formatSeconds(slideSeconds * 1000L));
+        writer.write('\n');
+    }
+
+    private static String concatFilePath(File file) {
+        return "'" + file.getAbsolutePath().replace("'", "'\\''") + "'";
+    }
+
+    private static String formatSeconds(long millis) {
+        return String.format(Locale.US, "%.3f", Math.max(0L, millis) / 1000.0);
     }
 
     private static VisualKind detectVisualKind(ContentResolver resolver, Uri uri, String givenMime) throws AvtohitException {

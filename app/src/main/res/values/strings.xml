@@ -20,8 +20,12 @@
     <string name="duration_value">Duration: %1$s</string>
     <string name="visual_choose_line">Choose a picture or short video</string>
     <string name="visual_image_duration_line">Image fills the MP3 length</string>
+    <string name="visual_image_count">%1$d images selected</string>
+    <string name="visual_multi_images_only">Select either one video or one or more images.</string>
+    <string name="visual_slideshow_detail">Slideshow: %1$s</string>
     <string name="audio_choose_line">Choose an MP3 soundtrack</string>
     <string name="export_output_line">Output: choose when merging</string>
+    <string name="export_image_time_line">Image time: %1$s</string>
     <string name="export_button">Merge To Video</string>
     <string name="back_button">Back</string>
     <string name="play_button">Play preview audio</string>
@@ -34,6 +38,7 @@
     <string name="failed_detail">Failed: %1$s</string>
     <string name="mode_picture">picture</string>
     <string name="mode_video">video</string>
+    <string name="mode_slideshow">slideshow</string>
     <string name="mp3_copied">MP3 copied</string>
     <string name="video_reencoded_mp3_copied">video re-encoded, MP3 copied</string>
     <string name="project_chip_visual">Visual: %1$s</string>
@@ -50,9 +55,12 @@
     <string name="settings_dialog_title">Settings</string>
     <string name="export_resolution_title">Resolution</string>
     <string name="export_fps_title">Frame rate</string>
+    <string name="image_time_title">Image time</string>
+    <string name="image_time_first_only">0 sec - first image only</string>
+    <string name="image_time_seconds">%1$d sec per image</string>
     <string name="app_skin_title">Application skin</string>
     <string name="help_title">Help</string>
-    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio lets you choose the MP3 soundtrack.\n\n3. Add Video/Image lets you choose the picture or short video.\n\n4. Merge To Video opens export settings and starts saving the final MP4.\n\n5. The status panel shows the selected visual, selected audio, and current export setup.\n\n6. Preview shows how the visual will look and lets you play the audio preview.</string>
+    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio lets you choose the MP3 soundtrack.\n\n3. Add Video/Image lets you choose one picture, multiple pictures, or one short video.\n\n4. Merge To Video opens export settings, including image time, and starts saving the final MP4.\n\n5. The status panel shows the selected visual, selected audio, and current export setup.\n\n6. Preview shows how the visual will look and lets you play the audio preview.</string>
     <string name="help_image_description">Annotated AVTOHIT screen with numbered callouts</string>
     <string name="about_us_title">About Us</string>
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
@@ -66,6 +74,7 @@
     <string name="export_cancel">Cancel</string>
     <string name="info_dialog_close">Close</string>
     <string name="export_summary">Current output: %1$s at %2$d fps</string>
+    <string name="export_summary_with_images">Current output: %1$s at %2$d fps. Image time: %3$s</string>
     <string name="settings_summary">Current skin: %1$s. Output: %2$s at %3$d fps</string>
     <string name="skin_summary">Current skin: %1$s</string>
     <string name="skin_status_saved">Skin updated: %1$s</string>

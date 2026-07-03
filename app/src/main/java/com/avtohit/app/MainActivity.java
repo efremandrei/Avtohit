@@ -2,6 +2,7 @@ package com.avtohit.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -39,7 +40,11 @@ import com.avtohit.app.media.ExportProfile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,8 +64,11 @@ public final class MainActivity extends Activity {
     private static final String STATE_VISUAL_NAME = "visual_name";
     private static final String STATE_VISUAL_IS_VIDEO = "visual_is_video";
     private static final String STATE_VISUAL_DURATION = "visual_duration";
+    private static final String STATE_VISUAL_IMAGE_URIS = "visual_image_uris";
+    private static final String STATE_VISUAL_IMAGE_NAMES = "visual_image_names";
     private static final String STATE_EXPORT_PROFILE = "export_profile";
     private static final String STATE_FRAME_RATE = "frame_rate";
+    private static final String STATE_SLIDE_SECONDS = "slide_seconds";
     private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
     private static final int POSITIVE_READY_LIGHT = 0xFF12664F;
     private static final int POSITIVE_READY_DARK = 0xFF74D7B5;
@@ -126,6 +134,33 @@ public final class MainActivity extends Activity {
         }
     };
 
+    private static final class ImageSelection {
+        final Uri uri;
+        final String displayName;
+
+        ImageSelection(Uri uri, String displayName) {
+            this.uri = uri;
+            this.displayName = displayName;
+        }
+    }
+
+    private static final Comparator<ImageSelection> IMAGE_SELECTION_COMPARATOR = (left, right) -> {
+        Long leftNumber = numericBaseName(left.displayName);
+        Long rightNumber = numericBaseName(right.displayName);
+        if (leftNumber != null && rightNumber != null) {
+            return leftNumber.compareTo(rightNumber);
+        }
+        if (leftNumber != null) {
+            return -1;
+        }
+        if (rightNumber != null) {
+            return 1;
+        }
+        String leftName = left.displayName != null ? left.displayName : "";
+        String rightName = right.displayName != null ? right.displayName : "";
+        return leftName.compareToIgnoreCase(rightName);
+    };
+
     private TextView visualChip;
     private TextView audioChip;
     private TextView exportChip;
@@ -164,6 +199,8 @@ public final class MainActivity extends Activity {
     private String visualMimeType;
     private String audioDisplayName;
     private String visualDisplayName;
+    private final ArrayList<Uri> visualImageUris = new ArrayList<>();
+    private final ArrayList<String> visualImageNames = new ArrayList<>();
     private boolean visualIsVideo;
     private boolean rendering;
     private boolean previewPlaying;
@@ -171,6 +208,7 @@ public final class MainActivity extends Activity {
     private long visualDurationMs;
     private ExportProfile exportProfile = ExportProfile.P1080;
     private int frameRate = 30;
+    private int slideSeconds;
     private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
     private volatile boolean activityActive = true;
@@ -215,25 +253,37 @@ public final class MainActivity extends Activity {
         outState.putString(STATE_VISUAL_NAME, visualDisplayName);
         outState.putBoolean(STATE_VISUAL_IS_VIDEO, visualIsVideo);
         outState.putLong(STATE_VISUAL_DURATION, visualDurationMs);
+        outState.putStringArrayList(STATE_VISUAL_IMAGE_URIS, visualImageUriStrings());
+        outState.putStringArrayList(STATE_VISUAL_IMAGE_NAMES, new ArrayList<>(visualImageNames));
         outState.putString(STATE_EXPORT_PROFILE, exportProfile.label);
         outState.putInt(STATE_FRAME_RATE, frameRate);
+        outState.putInt(STATE_SLIDE_SECONDS, slideSeconds);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+        if (resultCode != RESULT_OK || data == null) {
             return;
         }
 
         Uri uri = data.getData();
         if (requestCode == REQUEST_AUDIO) {
+            if (uri == null) {
+                return;
+            }
             takeReadPermission(data, uri);
             handleAudioSelection(uri);
         } else if (requestCode == REQUEST_VISUAL) {
-            takeReadPermission(data, uri);
-            handleVisualSelection(uri);
+            List<Uri> selectedVisuals = visualUrisFromResult(data);
+            for (Uri selectedUri : selectedVisuals) {
+                takeReadPermission(data, selectedUri);
+            }
+            handleVisualSelection(selectedVisuals);
         } else if (requestCode == REQUEST_OUTPUT) {
+            if (uri == null) {
+                return;
+            }
             takeWritePermission(data, uri);
             renderTo(uri);
             return;
@@ -325,8 +375,63 @@ public final class MainActivity extends Activity {
         visualDisplayName = savedInstanceState.getString(STATE_VISUAL_NAME);
         visualIsVideo = savedInstanceState.getBoolean(STATE_VISUAL_IS_VIDEO, false);
         visualDurationMs = savedInstanceState.getLong(STATE_VISUAL_DURATION, 0L);
+        restoreVisualImageState(savedInstanceState);
         exportProfile = exportProfileFromLabel(savedInstanceState.getString(STATE_EXPORT_PROFILE));
         frameRate = savedInstanceState.getInt(STATE_FRAME_RATE, frameRate);
+        slideSeconds = clampSlideSeconds(savedInstanceState.getInt(STATE_SLIDE_SECONDS, 0));
+    }
+
+    private void restoreVisualImageState(Bundle savedInstanceState) {
+        visualImageUris.clear();
+        visualImageNames.clear();
+        ArrayList<String> savedUriStrings = savedInstanceState.getStringArrayList(STATE_VISUAL_IMAGE_URIS);
+        ArrayList<String> savedNames = savedInstanceState.getStringArrayList(STATE_VISUAL_IMAGE_NAMES);
+        if (savedUriStrings != null) {
+            for (String rawUri : savedUriStrings) {
+                Uri parsedUri = parseUri(rawUri);
+                if (parsedUri != null) {
+                    visualImageUris.add(parsedUri);
+                }
+            }
+        }
+        if (savedNames != null) {
+            visualImageNames.addAll(savedNames);
+        }
+        while (visualImageNames.size() < visualImageUris.size()) {
+            visualImageNames.add(getString(R.string.visual_track_default));
+        }
+        if (visualImageUris.isEmpty() && visualUri != null && !visualIsVideo) {
+            visualImageUris.add(visualUri);
+            visualImageNames.add(visualDisplayName != null ? visualDisplayName : getString(R.string.visual_track_default));
+        }
+    }
+
+    private ArrayList<String> visualImageUriStrings() {
+        ArrayList<String> values = new ArrayList<>();
+        for (Uri uri : visualImageUris) {
+            if (uri != null) {
+                values.add(uri.toString());
+            }
+        }
+        return values;
+    }
+
+    private List<Uri> visualUrisFromResult(Intent data) {
+        ArrayList<Uri> uris = new ArrayList<>();
+        ClipData clipData = data.getClipData();
+        if (clipData != null) {
+            for (int i = 0; i < clipData.getItemCount(); i++) {
+                Uri uri = clipData.getItemAt(i).getUri();
+                if (uri != null) {
+                    uris.add(uri);
+                }
+            }
+        }
+        Uri directUri = data.getData();
+        if (uris.isEmpty() && directUri != null) {
+            uris.add(directUri);
+        }
+        return uris;
     }
 
     private void handleAudioSelection(Uri uri) {
@@ -352,7 +457,43 @@ public final class MainActivity extends Activity {
         status.setText(R.string.ready);
     }
 
-    private void handleVisualSelection(Uri uri) {
+    private void handleVisualSelection(List<Uri> selectedUris) {
+        if (selectedUris == null || selectedUris.isEmpty()) {
+            return;
+        }
+        if (selectedUris.size() == 1) {
+            handleSingleVisualSelection(selectedUris.get(0));
+            return;
+        }
+
+        ArrayList<ImageSelection> imageSelections = new ArrayList<>();
+        for (Uri uri : selectedUris) {
+            String mimeType = getContentResolver().getType(uri);
+            if (!isSupportedImage(mimeType, uri)) {
+                clearVisualSelection();
+                status.setText(R.string.visual_multi_images_only);
+                return;
+            }
+            imageSelections.add(new ImageSelection(uri, AvtohitProcessor.displayName(this, uri)));
+        }
+
+        Collections.sort(imageSelections, IMAGE_SELECTION_COMPARATOR);
+        clearVisualSelection();
+        for (ImageSelection selection : imageSelections) {
+            visualImageUris.add(selection.uri);
+            visualImageNames.add(selection.displayName);
+        }
+
+        ImageSelection firstImage = imageSelections.get(0);
+        visualUri = firstImage.uri;
+        visualMimeType = getContentResolver().getType(firstImage.uri);
+        visualDisplayName = getString(R.string.visual_image_count, imageSelections.size());
+        visualIsVideo = false;
+        visualDurationMs = 0L;
+        status.setText(R.string.ready);
+    }
+
+    private void handleSingleVisualSelection(Uri uri) {
         String mimeType = getContentResolver().getType(uri);
         if (!isSupportedVisual(mimeType, uri)) {
             clearVisualSelection();
@@ -365,6 +506,12 @@ public final class MainActivity extends Activity {
         visualDisplayName = AvtohitProcessor.displayName(this, uri);
         visualIsVideo = isVideoVisual(uri, visualMimeType);
         visualDurationMs = visualIsVideo ? readDuration(uri) : 0L;
+        visualImageUris.clear();
+        visualImageNames.clear();
+        if (!visualIsVideo) {
+            visualImageUris.add(uri);
+            visualImageNames.add(visualDisplayName);
+        }
         status.setText(R.string.ready);
     }
 
@@ -381,6 +528,8 @@ public final class MainActivity extends Activity {
         visualDisplayName = null;
         visualIsVideo = false;
         visualDurationMs = 0L;
+        visualImageUris.clear();
+        visualImageNames.clear();
     }
 
     private void launchPicker(Intent intent, int requestCode, int errorResId) {
@@ -416,6 +565,7 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         launchPicker(intent, REQUEST_VISUAL, R.string.visual_picker_unavailable);
     }
 
@@ -442,24 +592,42 @@ public final class MainActivity extends Activity {
         Uri selectedAudio = audioUri;
         Uri selectedVisual = visualUri;
         String selectedVisualMime = visualMimeType;
+        ArrayList<Uri> selectedImageUris = new ArrayList<>(visualImageUris);
+        boolean selectedVisualIsVideo = visualIsVideo;
         ExportProfile selectedProfile = exportProfile;
         int selectedFrameRate = frameRate;
         long selectedAudioDurationMs = audioDurationMs;
+        int selectedSlideSeconds = slideSeconds;
 
         try {
             executor.submit(() -> {
                 try {
-                    AvtohitProcessor.Result result = processor.render(
-                            getApplicationContext(),
-                            selectedAudio,
-                            selectedVisual,
-                            selectedVisualMime,
-                            destinationUri,
-                            selectedProfile,
-                            selectedFrameRate,
-                            selectedAudioDurationMs,
-                            (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
-                    );
+                    AvtohitProcessor.Result result;
+                    if (!selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
+                        result = processor.renderImages(
+                                getApplicationContext(),
+                                selectedAudio,
+                                selectedImageUris,
+                                destinationUri,
+                                selectedProfile,
+                                selectedFrameRate,
+                                selectedAudioDurationMs,
+                                selectedSlideSeconds,
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
+                        );
+                    } else {
+                        result = processor.render(
+                                getApplicationContext(),
+                                selectedAudio,
+                                selectedVisual,
+                                selectedVisualMime,
+                                destinationUri,
+                                selectedProfile,
+                                selectedFrameRate,
+                                selectedAudioDurationMs,
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
+                        );
+                    }
                     postToUiIfAlive(() -> onRenderSuccess(result));
                 } catch (IOException | AvtohitException | RuntimeException error) {
                     postToUiIfAlive(() -> onRenderFailure(error));
@@ -494,7 +662,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshProjectHeader() {
-        String visualSummary = visualDisplayName != null ? visualDisplayName : getString(R.string.visual_not_selected);
+        String visualSummary = visualSummaryText();
         String audioSummary = audioDisplayName != null ? audioDisplayName : getString(R.string.mp3_not_selected);
         String exportSummary = exportProfile.label + " - " + frameRate + "fps";
 
@@ -505,7 +673,9 @@ public final class MainActivity extends Activity {
                 ? getString(R.string.duration_value, formatDuration(audioDurationMs))
                 : getString(R.string.audio_choose_line));
         exportChip.setText(exportSummary);
-        exportOutputLine.setText(R.string.export_output_line);
+        exportOutputLine.setText(isImageVisualSelected()
+                ? getString(R.string.export_image_time_line, imageChangeSummary())
+                : getString(R.string.export_output_line));
         styleReadinessLabels();
 
         if (audioUri == null && visualUri == null) {
@@ -513,9 +683,26 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private String visualSummaryText() {
+        if (visualUri == null) {
+            return getString(R.string.visual_not_selected);
+        }
+        if (!visualIsVideo && visualImageUris.size() > 1) {
+            return getString(R.string.visual_image_count, visualImageUris.size());
+        }
+        return visualDisplayName != null ? visualDisplayName : getString(R.string.visual_not_selected);
+    }
+
+    private boolean isImageVisualSelected() {
+        return visualUri != null && !visualIsVideo;
+    }
+
     private String visualDetailLine() {
         if (visualUri == null) {
             return getString(R.string.visual_choose_line);
+        }
+        if (!visualIsVideo && visualImageUris.size() > 1) {
+            return getString(R.string.visual_slideshow_detail, imageChangeSummary());
         }
         if (visualIsVideo && visualDurationMs > 0L) {
             return getString(R.string.duration_value, formatDuration(visualDurationMs));
@@ -524,6 +711,17 @@ public final class MainActivity extends Activity {
             return getString(R.string.duration_value, formatDuration(audioDurationMs));
         }
         return getString(R.string.visual_image_duration_line);
+    }
+
+    private String imageChangeSummary() {
+        return imageChangeSummary(slideSeconds);
+    }
+
+    private String imageChangeSummary(int seconds) {
+        if (seconds <= 0) {
+            return getString(R.string.image_time_first_only);
+        }
+        return getString(R.string.image_time_seconds, seconds);
     }
 
     private void styleReadinessLabels() {
@@ -553,7 +751,7 @@ public final class MainActivity extends Activity {
                 previewArtwork.setImageResource(R.drawable.ic_launcher_foreground);
             }
             previewEmptyState.setVisibility(View.GONE);
-            previewModeLabel.setText(visualIsVideo ? R.string.mode_video : R.string.mode_picture);
+            previewModeLabel.setText(!visualIsVideo && visualImageUris.size() > 1 ? R.string.mode_slideshow : (visualIsVideo ? R.string.mode_video : R.string.mode_picture));
         }
 
         int totalMs = (int) Math.min(Integer.MAX_VALUE, audioDurationMs);
@@ -585,6 +783,9 @@ public final class MainActivity extends Activity {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_export, null);
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        TextView imageTimeTitle = dialogView.findViewById(R.id.imageTimeTitle);
+        SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
+        TextView imageTimeValue = dialogView.findViewById(R.id.imageTimeValue);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
         if (exportProfile == ExportProfile.P720) {
@@ -595,11 +796,34 @@ public final class MainActivity extends Activity {
             resolutionGroup.check(R.id.resolution1080);
         }
         fpsGroup.check(frameRate == 60 ? R.id.fps60 : R.id.fps30);
+        int imageTimeVisibility = isImageVisualSelected() ? View.VISIBLE : View.GONE;
+        imageTimeTitle.setVisibility(imageTimeVisibility);
+        imageTimeValue.setVisibility(imageTimeVisibility);
+        imageTimeSeek.setVisibility(imageTimeVisibility);
+        imageTimeSeek.setProgress(slideSeconds);
+        updateImageTimeValue(imageTimeSeek, imageTimeValue);
         updateExportSummary(dialogView, exportSummary);
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
         resolutionGroup.setOnCheckedChangeListener(listener);
         fpsGroup.setOnCheckedChangeListener(listener);
+        imageTimeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateImageTimeValue(seekBar, imageTimeValue);
+                updateExportSummary(dialogView, exportSummary);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // No-op.
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // No-op.
+            }
+        });
 
         TextView dialogTitle = buildDialogTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
 
@@ -760,6 +984,7 @@ public final class MainActivity extends Activity {
     private void applyExportSelection(View dialogView) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         int fpsId = fpsGroup.getCheckedRadioButtonId();
 
@@ -772,6 +997,7 @@ public final class MainActivity extends Activity {
         }
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
+        slideSeconds = clampSlideSeconds(imageTimeSeek.getProgress());
     }
 
     private void applySkinSelection(View dialogView) {
@@ -789,6 +1015,7 @@ public final class MainActivity extends Activity {
     private void updateExportSummary(View dialogView, TextView exportSummary) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
+        SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
 
         String resolutionLabel;
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
@@ -801,7 +1028,15 @@ public final class MainActivity extends Activity {
         }
 
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
-        exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
+        if (isImageVisualSelected()) {
+            exportSummary.setText(getString(R.string.export_summary_with_images, resolutionLabel, selectedFrameRate, imageChangeSummary(clampSlideSeconds(imageTimeSeek.getProgress()))));
+        } else {
+            exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
+        }
+    }
+
+    private void updateImageTimeValue(SeekBar seekBar, TextView imageTimeValue) {
+        imageTimeValue.setText(imageChangeSummary(clampSlideSeconds(seekBar.getProgress())));
     }
 
     private void updateSkinSummary(RadioGroup skinGroup, TextView skinSummary) {
@@ -864,7 +1099,7 @@ public final class MainActivity extends Activity {
 
     private boolean isVideoVisual(Uri uri, String mimeType) {
         String source = mimeType != null ? mimeType.toLowerCase(Locale.US) : uri.toString().toLowerCase(Locale.US);
-        return source.startsWith("video/") || source.endsWith(".mp4") || source.endsWith(".mov") || source.endsWith(".m4v") || source.endsWith(".webm");
+        return isSupportedVideo(source, uri);
     }
 
     private void updatePreviewTime(long currentMs, long totalMs) {
@@ -981,19 +1216,31 @@ public final class MainActivity extends Activity {
     }
 
     private boolean isSupportedVisual(String mimeType, Uri uri) {
+        return isSupportedImage(mimeType, uri) || isSupportedVideo(mimeType, uri);
+    }
+
+    private boolean isSupportedImage(String mimeType, Uri uri) {
         String source = firstNonBlank(mimeType, uri.toString());
         if (source == null) {
             return false;
         }
         String normalized = source.toLowerCase(Locale.US);
         return normalized.startsWith("image/")
-                || normalized.startsWith("video/")
                 || normalized.endsWith(".jpg")
                 || normalized.endsWith(".jpeg")
                 || normalized.endsWith(".png")
                 || normalized.endsWith(".webp")
                 || normalized.endsWith(".heic")
-                || normalized.endsWith(".heif")
+                || normalized.endsWith(".heif");
+    }
+
+    private boolean isSupportedVideo(String mimeType, Uri uri) {
+        String source = firstNonBlank(mimeType, uri != null ? uri.toString() : null);
+        if (source == null) {
+            return false;
+        }
+        String normalized = source.toLowerCase(Locale.US);
+        return normalized.startsWith("video/")
                 || normalized.endsWith(".mp4")
                 || normalized.endsWith(".mov")
                 || normalized.endsWith(".m4v")
@@ -1011,6 +1258,29 @@ public final class MainActivity extends Activity {
             }
         }
         return null;
+    }
+
+    private static Long numericBaseName(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+        String name = displayName.trim();
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        if (!name.matches("\\d+")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(name);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private static int clampSlideSeconds(int value) {
+        return Math.max(0, Math.min(60, value));
     }
 
     private String defaultOutputName() {
