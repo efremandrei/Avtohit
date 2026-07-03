@@ -91,26 +91,37 @@
                 android:textStyle="normal" />
             </LinearLayout>
 
-            <Button
+            <FrameLayout
                 android:id="@+id/exportButton"
                 android:layout_width="match_parent"
                 android:layout_height="76dp"
                 android:layout_marginTop="12dp"
                 android:background="@drawable/bg_export_button"
-                android:drawableStart="@drawable/ic_film"
-                android:drawablePadding="16dp"
-                android:drawableTint="@android:color/white"
+                android:clickable="true"
                 android:enabled="false"
-                android:fontFamily="sans"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
-                android:text="@string/export_button"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textSize="22sp"
-                android:textStyle="normal" />
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_gravity="start|center_vertical"
+                    android:layout_marginStart="36dp"
+                    android:contentDescription="@string/export_button"
+                    android:src="@drawable/ic_film"
+                    android:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:fontFamily="sans"
+                    android:includeFontPadding="false"
+                    android:text="@string/export_button"
+                    android:textColor="@android:color/white"
+                    android:textSize="25sp"
+                    android:textStyle="normal"
+                    android:translationX="-18dp" />
+            </FrameLayout>
 
             <LinearLayout
                 android:id="@+id/projectSummaryCard"

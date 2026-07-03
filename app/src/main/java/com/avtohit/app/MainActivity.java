@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
     private ImageView previewArtwork;
     private ImageButton playButton;
     private SeekBar previewSeek;
-    private Button exportButton;
+    private View exportButton;
     private Button selectVisualButton;
     private Button selectAudioButton;
     private Button helpButton;
