@@ -80,7 +80,6 @@
     <string name="skin_status_saved">Skin updated: %1$s</string>
     <string name="export_resolution_720">720p</string>
     <string name="export_resolution_1080">1080p</string>
-    <string name="export_resolution_4k">4K</string>
     <string name="export_fps_30">30 fps</string>
     <string name="export_fps_60">60 fps</string>
     <string name="export_status_saved">Export profile updated: %1$s at %2$d fps</string>

@@ -790,8 +790,6 @@ public final class MainActivity extends Activity {
 
         if (exportProfile == ExportProfile.P720) {
             resolutionGroup.check(R.id.resolution720);
-        } else if (exportProfile == ExportProfile.P4K) {
-            resolutionGroup.check(R.id.resolution4k);
         } else {
             resolutionGroup.check(R.id.resolution1080);
         }
@@ -990,8 +988,6 @@ public final class MainActivity extends Activity {
 
         if (resolutionId == R.id.resolution720) {
             exportProfile = ExportProfile.P720;
-        } else if (resolutionId == R.id.resolution4k) {
-            exportProfile = ExportProfile.P4K;
         } else {
             exportProfile = ExportProfile.P1080;
         }
@@ -1021,8 +1017,6 @@ public final class MainActivity extends Activity {
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         if (resolutionId == R.id.resolution720) {
             resolutionLabel = getString(R.string.export_resolution_720);
-        } else if (resolutionId == R.id.resolution4k) {
-            resolutionLabel = getString(R.string.export_resolution_4k);
         } else {
             resolutionLabel = getString(R.string.export_resolution_1080);
         }
@@ -1196,9 +1190,6 @@ public final class MainActivity extends Activity {
     private static ExportProfile exportProfileFromLabel(String label) {
         if (ExportProfile.P720.label.equals(label)) {
             return ExportProfile.P720;
-        }
-        if (ExportProfile.P4K.label.equals(label)) {
-            return ExportProfile.P4K;
         }
         return ExportProfile.P1080;
     }

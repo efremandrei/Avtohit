@@ -42,16 +42,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/export_resolution_1080" />
-
-            <RadioButton
-                android:id="@+id/resolution4k"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/export_resolution_4k" />
         </RadioGroup>
 
         <TextView
-            android:id="@+id/imageTimeTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
@@ -83,6 +76,7 @@
         </RadioGroup>
 
         <TextView
+            android:id="@+id/imageTimeTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"

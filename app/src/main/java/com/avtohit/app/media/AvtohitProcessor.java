@@ -15,11 +15,9 @@ import com.arthenica.ffmpegkit.Statistics;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.BufferedWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -155,7 +153,7 @@ public final class AvtohitProcessor {
         long runId = System.currentTimeMillis();
         File audioFile = new File(workDir, "audio-" + runId + ".mp3");
         File outputFile = new File(workDir, "output-" + runId + ".mp4");
-        File concatFile = new File(workDir, "images-" + runId + ".ffconcat");
+        File cycleFile = new File(workDir, "cycle-" + runId + ".mp4");
         ArrayList<File> imageFiles = new ArrayList<>();
 
         try {
@@ -167,8 +165,25 @@ public final class AvtohitProcessor {
                 imageFiles.add(imageFile);
             }
 
-            writeConcatFile(concatFile, imageFiles, targetDurationMs, slideSeconds);
-            FFmpegSession session = execute(buildSlideshowCommand(audioFile, concatFile, outputFile, exportProfile, frameRate, targetDurationMs), targetDurationMs, progressListener);
+            long cycleDurationMs = (long) imageFiles.size() * slideSeconds * 1000L;
+            long cycleProgressBudgetMs = Math.max(1L, targetDurationMs / 3L);
+            FFmpegSession cycleSession = execute(
+                    buildSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, slideSeconds),
+                    cycleDurationMs,
+                    scaledProgressListener(progressListener, 0L, cycleProgressBudgetMs, cycleDurationMs, targetDurationMs)
+            );
+            if (!ReturnCode.isSuccess(cycleSession.getReturnCode())) {
+                throw new AvtohitException("FFmpeg failed while preparing slideshow images: " + cycleSession.getOutput() + "\n" + cycleSession.getFailStackTrace());
+            }
+            if (!cycleFile.exists() || cycleFile.length() <= 0L) {
+                throw new IOException("Prepared slideshow cycle was not created.");
+            }
+
+            FFmpegSession session = execute(
+                    buildLoopedSlideshowCommand(audioFile, cycleFile, outputFile, targetDurationMs),
+                    targetDurationMs,
+                    scaledProgressListener(progressListener, cycleProgressBudgetMs, targetDurationMs - cycleProgressBudgetMs, targetDurationMs, targetDurationMs)
+            );
 
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
                 throw new AvtohitException("FFmpeg failed: " + session.getOutput() + "\n" + session.getFailStackTrace());
@@ -178,11 +193,11 @@ public final class AvtohitProcessor {
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
-            return new Result(VisualKind.IMAGE, false, outputFile.length(), session.getOutput());
+            return new Result(VisualKind.IMAGE, false, outputFile.length(), cycleSession.getOutput() + "\n" + session.getOutput());
         } finally {
             deleteIfExists(audioFile);
             deleteIfExists(outputFile);
-            deleteIfExists(concatFile);
+            deleteIfExists(cycleFile);
             for (File imageFile : imageFiles) {
                 deleteIfExists(imageFile);
             }
@@ -248,6 +263,24 @@ public final class AvtohitProcessor {
         long statisticTimeMs = Math.round(statistics.getTime());
         long currentMs = Math.min(Math.max(0L, statisticTimeMs), targetDurationMs);
         progressListener.onProgress(currentMs, targetDurationMs);
+    }
+
+    private static ProgressListener scaledProgressListener(
+            ProgressListener delegate,
+            long offsetMs,
+            long phaseSpanMs,
+            long phaseTotalMs,
+            long reportedTotalMs
+    ) {
+        if (delegate == null) {
+            return null;
+        }
+        return (currentMs, ignoredTotalMs) -> {
+            long safePhaseTotal = Math.max(1L, phaseTotalMs);
+            long clampedCurrent = Math.min(Math.max(0L, currentMs), safePhaseTotal);
+            long scaledCurrent = offsetMs + Math.round((clampedCurrent / (double) safePhaseTotal) * Math.max(1L, phaseSpanMs));
+            delegate.onProgress(Math.min(Math.max(0L, scaledCurrent), reportedTotalMs), reportedTotalMs);
+        };
     }
 
     private static List<String> buildImageCommand(
@@ -321,21 +354,70 @@ public final class AvtohitProcessor {
         return args;
     }
 
-    private static List<String> buildSlideshowCommand(
-            File audioFile,
-            File concatFile,
+    private static List<String> buildSlideshowCycleCommand(
+            List<File> imageFiles,
             File outputFile,
             ExportProfile exportProfile,
             int frameRate,
+            int slideSeconds
+    ) {
+        List<String> args = baseArgs();
+        String slideDuration = formatSeconds(slideSeconds * 1000L);
+        for (File imageFile : imageFiles) {
+            args.add("-loop");
+            args.add("1");
+            args.add("-framerate");
+            args.add(String.valueOf(frameRate));
+            args.add("-t");
+            args.add(slideDuration);
+            args.add("-i");
+            args.add(imageFile.getAbsolutePath());
+        }
+
+        StringBuilder filter = new StringBuilder();
+        for (int i = 0; i < imageFiles.size(); i++) {
+            filter.append('[')
+                    .append(i)
+                    .append(":v]")
+                    .append(buildScalePadFilter(exportProfile, frameRate))
+                    .append("[v")
+                    .append(i)
+                    .append("];");
+        }
+        for (int i = 0; i < imageFiles.size(); i++) {
+            filter.append("[v").append(i).append(']');
+        }
+        filter.append("concat=n=")
+                .append(imageFiles.size())
+                .append(":v=1:a=0[v]");
+        args.add("-filter_complex");
+        args.add(filter.toString());
+        args.add("-map");
+        args.add("[v]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-an");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildLoopedSlideshowCommand(
+            File audioFile,
+            File cycleFile,
+            File outputFile,
             long targetDurationMs
     ) {
         List<String> args = baseArgs();
-        args.add("-f");
-        args.add("concat");
-        args.add("-safe");
-        args.add("0");
+        args.add("-fflags");
+        args.add("+genpts");
+        args.add("-stream_loop");
+        args.add("-1");
         args.add("-i");
-        args.add(concatFile.getAbsolutePath());
+        args.add(cycleFile.getAbsolutePath());
         args.add("-i");
         args.add(audioFile.getAbsolutePath());
         args.add("-map");
@@ -344,12 +426,8 @@ public final class AvtohitProcessor {
         args.add("1:a:0");
         args.add("-t");
         args.add(formatSeconds(targetDurationMs));
-        args.add("-vf");
-        args.add(buildScalePadFilter(exportProfile, frameRate));
         args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        args.add("copy");
         args.add("-c:a");
         args.add("copy");
         args.add("-movflags");
@@ -370,39 +448,6 @@ public final class AvtohitProcessor {
                 + ",scale=" + exportProfile.width + ":" + exportProfile.height
                 + ":force_original_aspect_ratio=decrease,pad="
                 + exportProfile.width + ":" + exportProfile.height + ":(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p";
-    }
-
-    private static void writeConcatFile(File concatFile, List<File> imageFiles, long targetDurationMs, int slideSeconds) throws IOException {
-        long slideDurationMs = slideSeconds * 1000L;
-        long coveredMs = 0L;
-        int index = 0;
-        File lastFile = imageFiles.get(0);
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(concatFile))) {
-            writer.write("ffconcat version 1.0\n");
-            while (coveredMs < targetDurationMs + slideDurationMs) {
-                File imageFile = imageFiles.get(index % imageFiles.size());
-                writeConcatImage(writer, imageFile, slideSeconds);
-                lastFile = imageFile;
-                coveredMs += slideDurationMs;
-                index++;
-            }
-            writer.write("file ");
-            writer.write(concatFilePath(lastFile));
-            writer.write('\n');
-        }
-    }
-
-    private static void writeConcatImage(BufferedWriter writer, File imageFile, int slideSeconds) throws IOException {
-        writer.write("file ");
-        writer.write(concatFilePath(imageFile));
-        writer.write('\n');
-        writer.write("duration ");
-        writer.write(formatSeconds(slideSeconds * 1000L));
-        writer.write('\n');
-    }
-
-    private static String concatFilePath(File file) {
-        return "'" + file.getAbsolutePath().replace("'", "'\\''") + "'";
     }
 
     private static String formatSeconds(long millis) {
