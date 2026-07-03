@@ -9,6 +9,8 @@ import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.MediaMetadataRetriever;
@@ -138,6 +140,7 @@ public final class MainActivity extends Activity {
     private TextView previewTime;
     private TextView status;
     private TextView previewTitle;
+    private ImageView headerBanner;
     private ImageView previewArtwork;
     private ImageButton playButton;
     private SeekBar previewSeek;
@@ -255,6 +258,7 @@ public final class MainActivity extends Activity {
         previewTime = findViewById(R.id.previewTime);
         status = findViewById(R.id.status);
         previewTitle = findViewById(R.id.previewTitle);
+        headerBanner = findViewById(R.id.headerBanner);
         playButton = findViewById(R.id.playButton);
         previewSeek = findViewById(R.id.previewSeek);
         exportButton = findViewById(R.id.exportButton);
@@ -1116,6 +1120,7 @@ public final class MainActivity extends Activity {
         content.setBackgroundColor(currentSkin.backgroundColor);
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
         bottomActionsBar.setBackgroundColor(currentSkin.backgroundColor);
+        styleHeaderBanner();
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
@@ -1136,6 +1141,24 @@ public final class MainActivity extends Activity {
         previewTitle.setTextColor(currentSkin.textColor);
 
         updateSystemBars();
+    }
+
+    private void styleHeaderBanner() {
+        if (headerBanner == null) {
+            return;
+        }
+        if (currentSkin != AppSkin.DARK) {
+            headerBanner.clearColorFilter();
+            return;
+        }
+
+        ColorMatrix invertColors = new ColorMatrix(new float[]{
+                -1f, 0f, 0f, 0f, 255f,
+                0f, -1f, 0f, 0f, 255f,
+                0f, 0f, -1f, 0f, 255f,
+                0f, 0f, 0f, 1f, 0f
+        });
+        headerBanner.setColorFilter(new ColorMatrixColorFilter(invertColors));
     }
 
     private void styleCard(View view, int fillColor) {
