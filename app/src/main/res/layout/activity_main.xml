@@ -120,7 +120,7 @@
                     android:textColor="@android:color/white"
                     android:textSize="25sp"
                     android:textStyle="normal"
-                    android:translationX="-18dp" />
+                    android:translationX="20dp" />
             </FrameLayout>
 
             <LinearLayout
