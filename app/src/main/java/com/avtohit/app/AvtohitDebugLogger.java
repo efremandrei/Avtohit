@@ -51,7 +51,7 @@ public final class AvtohitDebugLogger {
                 .append("log_location=")
                 .append(displayLocation())
                 .append("\n\n");
-        write(builder.toString(), false);
+        write(builder.toString(), true);
     }
 
     public synchronized void append(String message) {
