@@ -211,7 +211,12 @@ public final class AvtohitProcessor {
             log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
             log(debugLogger, "audio_cache_bytes=" + audioFile.length());
-            for (int i = 0; i < imageUris.size(); i++) {
+            int cycleImageCount = slideshowCycleImageCount(imageUris.size(), targetDurationMs, slideSeconds);
+            int skippedImageCount = Math.max(0, imageUris.size() - cycleImageCount);
+            log(debugLogger, "slideshow_cycle_selection selectedImageCount=" + imageUris.size()
+                    + " usedImageCount=" + cycleImageCount
+                    + " skippedImageCount=" + skippedImageCount);
+            for (int i = 0; i < cycleImageCount; i++) {
                 Uri imageUri = imageUris.get(i);
                 File imageFile = new File(workDir, "image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
                 log(debugLogger, "copy_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
@@ -459,6 +464,18 @@ public final class AvtohitProcessor {
             long scaledCurrent = offsetMs + Math.round((clampedCurrent / (double) safePhaseTotal) * Math.max(1L, phaseSpanMs));
             delegate.onProgress(Math.min(Math.max(0L, scaledCurrent), reportedTotalMs), reportedTotalMs);
         };
+    }
+
+    private static int slideshowCycleImageCount(int selectedImageCount, long targetDurationMs, int slideSeconds) {
+        if (selectedImageCount <= 0) {
+            return 0;
+        }
+        long slideDurationMs = Math.max(1L, (long) slideSeconds * 1000L);
+        long imagesThatCanAppear = (targetDurationMs + slideDurationMs - 1L) / slideDurationMs;
+        if (imagesThatCanAppear <= 0L) {
+            return 1;
+        }
+        return (int) Math.min(selectedImageCount, Math.min((long) Integer.MAX_VALUE, imagesThatCanAppear));
     }
 
     private static List<String> buildImageCommand(
