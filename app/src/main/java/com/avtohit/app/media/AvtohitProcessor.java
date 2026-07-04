@@ -162,7 +162,7 @@ public final class AvtohitProcessor {
             int slideSeconds,
             ProgressListener progressListener
     ) throws IOException, AvtohitException {
-        return renderImages(context, audioUri, imageUris, destinationUri, exportProfile, frameRate, targetDurationMs, slideSeconds, progressListener, null);
+        return renderImages(context, audioUri, imageUris, destinationUri, exportProfile, frameRate, targetDurationMs, slideSeconds, false, progressListener, null);
     }
 
     public Result renderImages(
@@ -177,11 +177,30 @@ public final class AvtohitProcessor {
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
     ) throws IOException, AvtohitException {
+        return renderImages(context, audioUri, imageUris, destinationUri, exportProfile, frameRate, targetDurationMs, slideSeconds, false, progressListener, debugLogger);
+    }
+
+    public Result renderImages(
+            Context context,
+            Uri audioUri,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            int slideSeconds,
+            boolean autoSplitTime,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
         if (imageUris == null || imageUris.isEmpty()) {
             throw new AvtohitException("At least one image must be selected.");
         }
-        if (slideSeconds <= 0 || imageUris.size() == 1) {
-            log(debugLogger, "slideshow_delegated_to_single_image slideSeconds=" + slideSeconds + " imageCount=" + imageUris.size());
+        boolean useAutoSplit = autoSplitTime && slideSeconds <= 0 && imageUris.size() > 1;
+        if (!useAutoSplit && (slideSeconds <= 0 || imageUris.size() == 1)) {
+            log(debugLogger, "slideshow_delegated_to_single_image slideSeconds=" + slideSeconds
+                    + " imageCount=" + imageUris.size()
+                    + " autoSplitTime=" + autoSplitTime);
             return render(context, audioUri, imageUris.get(0), "image/*", destinationUri, exportProfile, frameRate, targetDurationMs, progressListener, debugLogger);
         }
         if (slideSeconds > 60) {
@@ -211,11 +230,14 @@ public final class AvtohitProcessor {
             log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
             log(debugLogger, "audio_cache_bytes=" + audioFile.length());
-            int cycleImageCount = slideshowCycleImageCount(imageUris.size(), targetDurationMs, slideSeconds);
+            int cycleImageCount = useAutoSplit
+                    ? imageUris.size()
+                    : slideshowCycleImageCount(imageUris.size(), targetDurationMs, slideSeconds);
             int skippedImageCount = Math.max(0, imageUris.size() - cycleImageCount);
             log(debugLogger, "slideshow_cycle_selection selectedImageCount=" + imageUris.size()
                     + " usedImageCount=" + cycleImageCount
-                    + " skippedImageCount=" + skippedImageCount);
+                    + " skippedImageCount=" + skippedImageCount
+                    + " autoSplitTime=" + useAutoSplit);
             for (int i = 0; i < cycleImageCount; i++) {
                 Uri imageUri = imageUris.get(i);
                 File imageFile = new File(workDir, "image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
@@ -225,16 +247,21 @@ public final class AvtohitProcessor {
                 imageFiles.add(imageFile);
             }
 
-            long cycleDurationMs = (long) imageFiles.size() * slideSeconds * 1000L;
+            long cycleDurationMs = useAutoSplit
+                    ? targetDurationMs
+                    : (long) imageFiles.size() * slideSeconds * 1000L;
             long cycleProgressBudgetMs = Math.max(1L, targetDurationMs / 3L);
             log(debugLogger, "slideshow_cycle imageCount=" + imageFiles.size()
                     + " slideSeconds=" + slideSeconds
+                    + " autoSplitTime=" + useAutoSplit
                     + " cycleDurationMs=" + cycleDurationMs
                     + " targetDurationMs=" + targetDurationMs
                     + " cycleProgressBudgetMs=" + cycleProgressBudgetMs);
             FFmpegSession cycleSession = execute(
                     "slideshow_cycle",
-                    buildSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, slideSeconds),
+                    useAutoSplit
+                            ? buildAutoSplitSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, targetDurationMs, debugLogger)
+                            : buildSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, slideSeconds),
                     cycleDurationMs,
                     scaledProgressListener(progressListener, 0L, cycleProgressBudgetMs, cycleDurationMs, targetDurationMs),
                     debugLogger
@@ -605,6 +632,63 @@ public final class AvtohitProcessor {
         return args;
     }
 
+    private static List<String> buildAutoSplitSlideshowCycleCommand(
+            List<File> imageFiles,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            AvtohitDebugLogger debugLogger
+    ) {
+        List<Long> durationsMs = splitDurationAcrossImages(targetDurationMs, imageFiles.size());
+        log(debugLogger, "auto_split_plan imageCount=" + imageFiles.size()
+                + " targetDurationMs=" + targetDurationMs
+                + " firstImageDurationMs=" + (durationsMs.isEmpty() ? 0L : durationsMs.get(0)));
+
+        List<String> args = baseArgs();
+        for (int i = 0; i < imageFiles.size(); i++) {
+            args.add("-loop");
+            args.add("1");
+            args.add("-framerate");
+            args.add(String.valueOf(frameRate));
+            args.add("-t");
+            args.add(formatSeconds(durationsMs.get(i)));
+            args.add("-i");
+            args.add(imageFiles.get(i).getAbsolutePath());
+        }
+
+        StringBuilder filter = new StringBuilder();
+        for (int i = 0; i < imageFiles.size(); i++) {
+            filter.append('[')
+                    .append(i)
+                    .append(":v]")
+                    .append(buildScalePadFilter(exportProfile, frameRate))
+                    .append("[v")
+                    .append(i)
+                    .append("];");
+        }
+        for (int i = 0; i < imageFiles.size(); i++) {
+            filter.append("[v").append(i).append(']');
+        }
+        filter.append("concat=n=")
+                .append(imageFiles.size())
+                .append(":v=1:a=0[v]");
+
+        args.add("-filter_complex");
+        args.add(filter.toString());
+        args.add("-map");
+        args.add("[v]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-an");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
     private static List<String> buildSlideshowCycleCommand(
             List<File> imageFiles,
             File outputFile,
@@ -654,6 +738,21 @@ public final class AvtohitProcessor {
         args.add("+faststart");
         args.add(outputFile.getAbsolutePath());
         return args;
+    }
+
+    private static List<Long> splitDurationAcrossImages(long targetDurationMs, int imageCount) {
+        ArrayList<Long> durations = new ArrayList<>();
+        if (imageCount <= 0) {
+            return durations;
+        }
+        long safeTargetMs = Math.max(1L, targetDurationMs);
+        long baseMs = Math.max(1L, safeTargetMs / imageCount);
+        long remainderMs = Math.max(0L, safeTargetMs - (baseMs * imageCount));
+        for (int i = 0; i < imageCount; i++) {
+            long extraMs = i < remainderMs ? 1L : 0L;
+            durations.add(baseMs + extraMs);
+        }
+        return durations;
     }
 
     private static List<String> buildLoopedSlideshowCommand(

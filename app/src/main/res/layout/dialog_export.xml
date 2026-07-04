@@ -104,6 +104,16 @@
             android:progressTint="@color/avtohit_positive"
             android:thumbTint="@color/avtohit_positive" />
 
+        <CheckBox
+            android:id="@+id/autoSplitTimeCheck"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:buttonTint="@color/avtohit_positive"
+            android:text="@string/auto_split_time"
+            android:textColor="@color/avtohit_text"
+            android:textSize="14sp" />
+
         <TextView
             android:id="@+id/exportSummary"
             android:layout_width="match_parent"

@@ -28,6 +28,7 @@ import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -76,6 +77,7 @@ public final class MainActivity extends Activity {
     private static final String STATE_EXPORT_PROFILE = "export_profile";
     private static final String STATE_FRAME_RATE = "frame_rate";
     private static final String STATE_SLIDE_SECONDS = "slide_seconds";
+    private static final String STATE_AUTO_SPLIT_TIME = "auto_split_time";
     private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
     private static final int POSITIVE_READY_LIGHT = 0xFF12664F;
     private static final int POSITIVE_READY_DARK = 0xFF74D7B5;
@@ -265,6 +267,7 @@ public final class MainActivity extends Activity {
     private ExportProfile exportProfile = ExportProfile.P1080;
     private int frameRate = 30;
     private int slideSeconds;
+    private boolean autoSplitTime;
     private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
     private volatile boolean activityActive = true;
@@ -319,6 +322,7 @@ public final class MainActivity extends Activity {
         outState.putString(STATE_EXPORT_PROFILE, exportProfile.label);
         outState.putInt(STATE_FRAME_RATE, frameRate);
         outState.putInt(STATE_SLIDE_SECONDS, slideSeconds);
+        outState.putBoolean(STATE_AUTO_SPLIT_TIME, autoSplitTime);
     }
 
     @Override
@@ -441,6 +445,7 @@ public final class MainActivity extends Activity {
         exportProfile = exportProfileFromLabel(savedInstanceState.getString(STATE_EXPORT_PROFILE));
         frameRate = savedInstanceState.getInt(STATE_FRAME_RATE, frameRate);
         slideSeconds = clampSlideSeconds(savedInstanceState.getInt(STATE_SLIDE_SECONDS, 0));
+        autoSplitTime = savedInstanceState.getBoolean(STATE_AUTO_SPLIT_TIME, false);
     }
 
     private void restoreVisualImageState(Bundle savedInstanceState) {
@@ -765,6 +770,7 @@ public final class MainActivity extends Activity {
         long selectedAudioDurationMs = audioDurationMs;
         long selectedVisualDurationMs = visualDurationMs;
         int selectedSlideSeconds = slideSeconds;
+        boolean selectedAutoSplitTime = autoSplitTime;
         String selectedAudioName = audioDisplayName;
         String selectedVisualName = visualDisplayName;
         ArrayList<String> selectedImageNames = new ArrayList<>(visualImageNames);
@@ -796,7 +802,8 @@ public final class MainActivity extends Activity {
                             selectedFrameRate,
                             selectedAudioDurationMs,
                             selectedVisualDurationMs,
-                            selectedSlideSeconds
+                            selectedSlideSeconds,
+                            selectedAutoSplitTime
                     );
                     AvtohitProcessor.Result result;
                     if (selectedAudio == null && selectedVideoUris.size() > 1) {
@@ -820,6 +827,7 @@ public final class MainActivity extends Activity {
                                 selectedFrameRate,
                                 selectedAudioDurationMs,
                                 selectedSlideSeconds,
+                                selectedAutoSplitTime,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
                         );
@@ -873,7 +881,8 @@ public final class MainActivity extends Activity {
             int selectedFrameRate,
             long selectedAudioDurationMs,
             long selectedVisualDurationMs,
-            int selectedSlideSeconds
+            int selectedSlideSeconds,
+            boolean selectedAutoSplitTime
     ) {
         logger.append("audio_name=" + safeLogValue(selectedAudioName));
         logger.append("audio_uri=" + uriSummary(selectedAudio));
@@ -885,6 +894,7 @@ public final class MainActivity extends Activity {
         logger.append("visual_duration_ms=" + selectedVisualDurationMs + " formatted=" + formatDuration(selectedVisualDurationMs));
         logger.append("image_count=" + selectedImageUris.size());
         logger.append("slide_seconds=" + selectedSlideSeconds);
+        logger.append("auto_split_time=" + selectedAutoSplitTime);
         for (int i = 0; i < selectedImageUris.size(); i++) {
             String imageName = i < selectedImageNames.size() ? selectedImageNames.get(i) : "";
             logger.append("image_order[" + i + "] name=" + safeLogValue(imageName) + " uri=" + uriSummary(selectedImageUris.get(i)));
@@ -1013,12 +1023,12 @@ public final class MainActivity extends Activity {
     }
 
     private String imageChangeSummary() {
-        return imageChangeSummary(slideSeconds);
+        return imageChangeSummary(slideSeconds, autoSplitTime);
     }
 
-    private String imageChangeSummary(int seconds) {
+    private String imageChangeSummary(int seconds, boolean autoSplit) {
         if (seconds <= 0) {
-            return getString(R.string.image_time_first_only);
+            return autoSplit ? getString(R.string.image_time_auto_split) : getString(R.string.image_time_first_only);
         }
         return getString(R.string.image_time_seconds, seconds);
     }
@@ -1086,6 +1096,7 @@ public final class MainActivity extends Activity {
         TextView imageTimeTitle = dialogView.findViewById(R.id.imageTimeTitle);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
         TextView imageTimeValue = dialogView.findViewById(R.id.imageTimeValue);
+        CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
         if (exportProfile == ExportProfile.P720) {
@@ -1098,8 +1109,10 @@ public final class MainActivity extends Activity {
         imageTimeTitle.setVisibility(imageTimeVisibility);
         imageTimeValue.setVisibility(imageTimeVisibility);
         imageTimeSeek.setVisibility(imageTimeVisibility);
+        autoSplitTimeCheck.setVisibility(imageTimeVisibility);
         imageTimeSeek.setProgress(slideSeconds);
-        updateImageTimeValue(imageTimeSeek, imageTimeValue);
+        autoSplitTimeCheck.setChecked(autoSplitTime);
+        updateImageTimeValue(imageTimeSeek, imageTimeValue, autoSplitTimeCheck);
         updateExportSummary(dialogView, exportSummary);
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
@@ -1108,7 +1121,7 @@ public final class MainActivity extends Activity {
         imageTimeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateImageTimeValue(seekBar, imageTimeValue);
+                updateImageTimeValue(seekBar, imageTimeValue, autoSplitTimeCheck);
                 updateExportSummary(dialogView, exportSummary);
             }
 
@@ -1121,6 +1134,10 @@ public final class MainActivity extends Activity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 // No-op.
             }
+        });
+        autoSplitTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            updateImageTimeValue(imageTimeSeek, imageTimeValue, autoSplitTimeCheck);
+            updateExportSummary(dialogView, exportSummary);
         });
 
         TextView dialogTitle = buildDialogTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
@@ -1283,6 +1300,7 @@ public final class MainActivity extends Activity {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
+        CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         int fpsId = fpsGroup.getCheckedRadioButtonId();
 
@@ -1294,6 +1312,7 @@ public final class MainActivity extends Activity {
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
         slideSeconds = clampSlideSeconds(imageTimeSeek.getProgress());
+        autoSplitTime = autoSplitTimeCheck.isChecked();
     }
 
     private void applySkinSelection(View dialogView) {
@@ -1312,6 +1331,7 @@ public final class MainActivity extends Activity {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
+        CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
 
         String resolutionLabel;
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
@@ -1323,14 +1343,19 @@ public final class MainActivity extends Activity {
 
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
         if (isImageVisualSelected()) {
-            exportSummary.setText(getString(R.string.export_summary_with_images, resolutionLabel, selectedFrameRate, imageChangeSummary(clampSlideSeconds(imageTimeSeek.getProgress()))));
+            exportSummary.setText(getString(
+                    R.string.export_summary_with_images,
+                    resolutionLabel,
+                    selectedFrameRate,
+                    imageChangeSummary(clampSlideSeconds(imageTimeSeek.getProgress()), autoSplitTimeCheck.isChecked())
+            ));
         } else {
             exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
         }
     }
 
-    private void updateImageTimeValue(SeekBar seekBar, TextView imageTimeValue) {
-        imageTimeValue.setText(imageChangeSummary(clampSlideSeconds(seekBar.getProgress())));
+    private void updateImageTimeValue(SeekBar seekBar, TextView imageTimeValue, CheckBox autoSplitTimeCheck) {
+        imageTimeValue.setText(imageChangeSummary(clampSlideSeconds(seekBar.getProgress()), autoSplitTimeCheck.isChecked()));
     }
 
     private void updateSkinSummary(RadioGroup skinGroup, TextView skinSummary) {
