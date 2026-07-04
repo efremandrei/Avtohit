@@ -30,12 +30,14 @@ public final class AvtohitProcessor {
 
     public enum VisualKind {
         IMAGE,
-        VIDEO
+        VIDEO,
+        VIDEO_SEQUENCE
     }
 
     public static final class Result {
         public final VisualKind visualKind;
         public final boolean videoReencoded;
+        public final boolean usesImportedMp3;
         public final long outputBytes;
         public final String ffmpegOutput;
 
@@ -45,8 +47,19 @@ public final class AvtohitProcessor {
                 long outputBytes,
                 String ffmpegOutput
         ) {
+            this(visualKind, videoReencoded, true, outputBytes, ffmpegOutput);
+        }
+
+        private Result(
+                VisualKind visualKind,
+                boolean videoReencoded,
+                boolean usesImportedMp3,
+                long outputBytes,
+                String ffmpegOutput
+        ) {
             this.visualKind = visualKind;
             this.videoReencoded = videoReencoded;
+            this.usesImportedMp3 = usesImportedMp3;
             this.outputBytes = outputBytes;
             this.ffmpegOutput = ffmpegOutput;
         }
@@ -257,6 +270,73 @@ public final class AvtohitProcessor {
         }
     }
 
+    public Result renderVideos(
+            Context context,
+            List<Uri> videoUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        if (videoUris == null || videoUris.size() < 2) {
+            throw new AvtohitException("Select at least two videos to merge.");
+        }
+        if (destinationUri == null) {
+            throw new AvtohitException("Output target must be selected.");
+        }
+
+        ContentResolver resolver = context.getContentResolver();
+        File workDir = new File(context.getCacheDir(), "avtohit");
+        if (!workDir.exists() && !workDir.mkdirs()) {
+            throw new IOException("Could not create AVTOHIT cache directory.");
+        }
+
+        pruneStaleWorkFiles(workDir);
+        long runId = System.currentTimeMillis();
+        File outputFile = new File(workDir, "output-video-sequence-" + runId + ".mp4");
+        ArrayList<File> videoFiles = new ArrayList<>();
+
+        try {
+            log(debugLogger, "video_sequence_input_count=" + videoUris.size()
+                    + " targetDurationMs=" + targetDurationMs
+                    + " frameRate=" + frameRate
+                    + " export=" + exportProfile.label);
+            for (int i = 0; i < videoUris.size(); i++) {
+                Uri videoUri = videoUris.get(i);
+                File videoFile = new File(workDir, "video-" + runId + "-" + i + "." + visualExtension(resolver, videoUri, resolver.getType(videoUri)));
+                log(debugLogger, "copy_video_to_cache index=" + i + " target=" + videoFile.getAbsolutePath());
+                copyUriToFile(resolver, videoUri, videoFile);
+                log(debugLogger, "video_cache_bytes index=" + i + " bytes=" + videoFile.length());
+                videoFiles.add(videoFile);
+            }
+
+            FFmpegSession session = execute(
+                    "concat_videos",
+                    buildVideoSequenceCommand(videoFiles, outputFile, exportProfile, frameRate),
+                    targetDurationMs,
+                    progressListener,
+                    debugLogger
+            );
+            if (!ReturnCode.isSuccess(session.getReturnCode())) {
+                throw new AvtohitException("FFmpeg failed while merging videos: " + session.getOutput() + "\n" + session.getFailStackTrace());
+            }
+            if (!outputFile.exists() || outputFile.length() <= 0L) {
+                throw new IOException("Merged video file was not created.");
+            }
+
+            copyFileToUri(resolver, outputFile, destinationUri);
+            log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
+            return new Result(VisualKind.VIDEO_SEQUENCE, true, false, outputFile.length(), session.getOutput());
+        } finally {
+            deleteIfExists(outputFile);
+            for (File videoFile : videoFiles) {
+                deleteIfExists(videoFile);
+            }
+        }
+    }
+
     public static String displayName(Context context, Uri uri) {
         Cursor cursor;
         try {
@@ -446,6 +526,62 @@ public final class AvtohitProcessor {
         args.add("-c:a");
         args.add("copy");
         args.add("-shortest");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildVideoSequenceCommand(
+            List<File> videoFiles,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate
+    ) {
+        List<String> args = baseArgs();
+        for (File videoFile : videoFiles) {
+            args.add("-i");
+            args.add(videoFile.getAbsolutePath());
+        }
+
+        StringBuilder filter = new StringBuilder();
+        for (int i = 0; i < videoFiles.size(); i++) {
+            filter.append('[')
+                    .append(i)
+                    .append(":v:0]")
+                    .append(buildScalePadFilter(exportProfile, frameRate))
+                    .append("[v")
+                    .append(i)
+                    .append("];");
+            filter.append('[')
+                    .append(i)
+                    .append(":a:0]")
+                    .append("aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo")
+                    .append("[a")
+                    .append(i)
+                    .append("];");
+        }
+        for (int i = 0; i < videoFiles.size(); i++) {
+            filter.append("[v").append(i).append("][a").append(i).append(']');
+        }
+        filter.append("concat=n=")
+                .append(videoFiles.size())
+                .append(":v=1:a=1[v][a]");
+
+        args.add("-filter_complex");
+        args.add(filter.toString());
+        args.add("-map");
+        args.add("[v]");
+        args.add("-map");
+        args.add("[a]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-c:a");
+        args.add("aac");
+        args.add("-b:a");
+        args.add("192k");
         args.add("-movflags");
         args.add("+faststart");
         args.add(outputFile.getAbsolutePath());
