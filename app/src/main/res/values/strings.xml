@@ -18,7 +18,7 @@
     <string name="summary_export">Export</string>
     <string name="status_needed">Needed</string>
     <string name="duration_value">Duration: %1$s</string>
-    <string name="visual_choose_line">Choose a picture or short video</string>
+    <string name="visual_choose_line">Choose one picture, multiple pictures, or a short video</string>
     <string name="visual_image_duration_line">Image fills the MP3 length</string>
     <string name="visual_image_count">%1$d images selected</string>
     <string name="visual_multi_images_only">Select either one video or one or more images.</string>
@@ -60,8 +60,8 @@
     <string name="image_time_seconds">%1$d sec per image</string>
     <string name="app_skin_title">Application skin</string>
     <string name="help_title">Help</string>
-    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio lets you choose the MP3 soundtrack.\n\n3. Add Video/Image lets you choose one picture, multiple pictures, or one short video.\n\n4. Merge To Video opens export settings, including image time, and starts saving the final MP4.\n\n5. The status panel shows the selected visual, selected audio, and current export setup.\n\n6. Preview shows how the visual will look and lets you play the audio preview.</string>
-    <string name="help_image_description">Annotated AVTOHIT screen with numbered callouts</string>
+    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio selects the MP3 soundtrack.\n\n3. Add Video/Image selects one picture, multiple pictures, or one short video. Numbered image names are sorted in numeric order.\n\n4. Merge To Video opens export settings and then asks where to save the final MP4.\n\n5. The status panel shows the selected visual, audio, and readiness.\n\n6. Export settings support 720p or 1080p, 30/60 fps, and Image time. 0 sec keeps the first image for the whole song; 1-60 sec rotates images in order and loops them until the MP3 ends.\n\n7. Preview plays the MP3 and shows the selected visual. The merge progress bar appears while the final video is created.</string>
+    <string name="help_image_description">Annotated AVTOHIT screen showing audio, visual, merge, status, image time, preview, progress, and bottom action controls</string>
     <string name="about_us_title">About Us</string>
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
     <string name="about_email_plain">andrei.efr@gmail.com</string>
