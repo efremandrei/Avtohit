@@ -36,6 +36,7 @@
     <string name="creating">Creating video&#8230;</string>
     <string name="done_detail">Video saved (%1$s, %2$s)</string>
     <string name="failed_detail">Failed: %1$s</string>
+    <string name="failed_detail_with_log">Failed: %1$s\nLog: %2$s</string>
     <string name="mode_picture">picture</string>
     <string name="mode_video">video</string>
     <string name="mode_slideshow">slideshow</string>
@@ -60,7 +61,7 @@
     <string name="image_time_seconds">%1$d sec per image</string>
     <string name="app_skin_title">Application skin</string>
     <string name="help_title">Help</string>
-    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio selects the MP3 soundtrack.\n\n3. Add Video/Image selects one picture, multiple pictures, or one short video. Numbered image names are sorted in numeric order.\n\n4. Merge To Video opens export settings and then asks where to save the final MP4.\n\n5. The status panel shows the selected visual, audio, and readiness.\n\n6. Export settings support 720p or 1080p, 30/60 fps, and Image time. 0 sec keeps the first image for the whole song; 1-60 sec rotates images in order and loops them until the MP3 ends.\n\n7. Preview plays the MP3 and shows the selected visual. The merge progress bar appears while the final video is created.</string>
+    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio selects the MP3 soundtrack.\n\n3. Add Video/Image selects one picture, multiple pictures, or one short video. Numbered image names are sorted in numeric order.\n\n4. Merge To Video opens export settings and then asks where to save the final MP4.\n\n5. The status panel shows the selected visual, audio, and readiness.\n\n6. Export settings support 720p or 1080p, 30/60 fps, and Image time. 0 sec keeps the first image for the whole song; 1-60 sec rotates images in order and loops them until the MP3 ends.\n\n7. Preview plays the MP3 and shows the selected visual. The merge progress bar appears while the final video is created.\n\n8. If merging gets stuck or fails, send Downloads/AVTOHIT/AVTOHIT-debug-log.txt. A fresh log is created at the start of each merge.</string>
     <string name="help_image_description">Annotated AVTOHIT screen showing audio, visual, merge, status, image time, preview, progress, and bottom action controls</string>
     <string name="about_us_title">About Us</string>
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>

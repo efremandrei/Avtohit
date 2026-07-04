@@ -120,6 +120,7 @@ public final class MainActivity extends Activity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AvtohitProcessor processor = new AvtohitProcessor();
+    private AvtohitDebugLogger debugLogger;
 
     private final Runnable previewTicker = new Runnable() {
         @Override
@@ -218,6 +219,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        debugLogger = new AvtohitDebugLogger(this);
         bindViews();
         currentSkin = readSavedSkin();
         restoreState(savedInstanceState);
@@ -598,10 +600,31 @@ public final class MainActivity extends Activity {
         int selectedFrameRate = frameRate;
         long selectedAudioDurationMs = audioDurationMs;
         int selectedSlideSeconds = slideSeconds;
+        String selectedAudioName = audioDisplayName;
+        String selectedVisualName = visualDisplayName;
+        ArrayList<String> selectedImageNames = new ArrayList<>(visualImageNames);
+        AvtohitDebugLogger selectedLogger = debugLogger != null ? debugLogger : new AvtohitDebugLogger(this);
 
         try {
             executor.submit(() -> {
                 try {
+                    selectedLogger.startRun("AVTOHIT merge");
+                    logRenderInputs(
+                            selectedLogger,
+                            selectedAudio,
+                            selectedAudioName,
+                            selectedVisual,
+                            selectedVisualMime,
+                            selectedVisualName,
+                            selectedVisualIsVideo,
+                            selectedImageUris,
+                            selectedImageNames,
+                            destinationUri,
+                            selectedProfile,
+                            selectedFrameRate,
+                            selectedAudioDurationMs,
+                            selectedSlideSeconds
+                    );
                     AvtohitProcessor.Result result;
                     if (!selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
                         result = processor.renderImages(
@@ -613,7 +636,8 @@ public final class MainActivity extends Activity {
                                 selectedFrameRate,
                                 selectedAudioDurationMs,
                                 selectedSlideSeconds,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
+                                selectedLogger
                         );
                     } else {
                         result = processor.render(
@@ -625,18 +649,59 @@ public final class MainActivity extends Activity {
                                 selectedProfile,
                                 selectedFrameRate,
                                 selectedAudioDurationMs,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs))
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
+                                selectedLogger
                         );
                     }
+                    selectedLogger.append("render_success outputBytes=" + result.outputBytes
+                            + " visualKind=" + result.visualKind
+                            + " videoReencoded=" + result.videoReencoded);
                     postToUiIfAlive(() -> onRenderSuccess(result));
                 } catch (IOException | AvtohitException | RuntimeException error) {
+                    selectedLogger.append(error);
                     postToUiIfAlive(() -> onRenderFailure(error));
                 }
             });
         } catch (RejectedExecutionException error) {
+            selectedLogger.append(error);
             setRendering(false);
             status.setText(R.string.render_unavailable);
         }
+    }
+
+    private void logRenderInputs(
+            AvtohitDebugLogger logger,
+            Uri selectedAudio,
+            String selectedAudioName,
+            Uri selectedVisual,
+            String selectedVisualMime,
+            String selectedVisualName,
+            boolean selectedVisualIsVideo,
+            List<Uri> selectedImageUris,
+            List<String> selectedImageNames,
+            Uri destinationUri,
+            ExportProfile selectedProfile,
+            int selectedFrameRate,
+            long selectedAudioDurationMs,
+            int selectedSlideSeconds
+    ) {
+        logger.append("audio_name=" + safeLogValue(selectedAudioName));
+        logger.append("audio_uri=" + uriSummary(selectedAudio));
+        logger.append("audio_duration_ms=" + selectedAudioDurationMs + " formatted=" + formatDuration(selectedAudioDurationMs));
+        logger.append("visual_name=" + safeLogValue(selectedVisualName));
+        logger.append("visual_uri=" + uriSummary(selectedVisual));
+        logger.append("visual_mime=" + safeLogValue(selectedVisualMime));
+        logger.append("visual_is_video=" + selectedVisualIsVideo);
+        logger.append("image_count=" + selectedImageUris.size());
+        logger.append("slide_seconds=" + selectedSlideSeconds);
+        for (int i = 0; i < selectedImageUris.size(); i++) {
+            String imageName = i < selectedImageNames.size() ? selectedImageNames.get(i) : "";
+            logger.append("image_order[" + i + "] name=" + safeLogValue(imageName) + " uri=" + uriSummary(selectedImageUris.get(i)));
+        }
+        logger.append("destination_uri=" + uriSummary(destinationUri));
+        logger.append("export_profile=" + selectedProfile.label + " " + selectedProfile.width + "x" + selectedProfile.height);
+        logger.append("frame_rate=" + selectedFrameRate);
+        logger.append("log_location=" + logger.displayLocation());
     }
 
     private void onRenderSuccess(AvtohitProcessor.Result result) {
@@ -652,7 +717,11 @@ public final class MainActivity extends Activity {
 
     private void onRenderFailure(Throwable error) {
         setRendering(false);
-        status.setText(getString(R.string.failed_detail, safeMessage(error)));
+        status.setText(getString(R.string.failed_detail_with_log, safeMessage(error), debugLogLocation()));
+    }
+
+    private String debugLogLocation() {
+        return debugLogger != null ? debugLogger.displayLocation() : "Downloads/AVTOHIT/AVTOHIT-debug-log.txt";
     }
 
     private void refreshUi() {
@@ -1319,6 +1388,29 @@ public final class MainActivity extends Activity {
             return compact.substring(0, 280) + "...";
         }
         return compact;
+    }
+
+    private static String safeLogValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace('\n', ' ').replace('\r', ' ').trim();
+    }
+
+    private static String uriSummary(Uri uri) {
+        if (uri == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append(uri.getScheme() != null ? uri.getScheme() : "");
+        if (uri.getAuthority() != null) {
+            builder.append("://").append(uri.getAuthority());
+        }
+        String path = uri.getPath();
+        if (path != null && !path.trim().isEmpty()) {
+            builder.append(path);
+        }
+        return builder.toString();
     }
 
     private static String formatDuration(long millis) {

@@ -11,6 +11,7 @@ import com.arthenica.ffmpegkit.FFmpegKit;
 import com.arthenica.ffmpegkit.FFmpegSession;
 import com.arthenica.ffmpegkit.ReturnCode;
 import com.arthenica.ffmpegkit.Statistics;
+import com.avtohit.app.AvtohitDebugLogger;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -66,6 +67,21 @@ public final class AvtohitProcessor {
             long targetDurationMs,
             ProgressListener progressListener
     ) throws IOException, AvtohitException {
+        return render(context, audioUri, visualUri, visualMimeType, destinationUri, exportProfile, frameRate, targetDurationMs, progressListener, null);
+    }
+
+    public Result render(
+            Context context,
+            Uri audioUri,
+            Uri visualUri,
+            String visualMimeType,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
         if (audioUri == null || visualUri == null || destinationUri == null) {
             throw new AvtohitException("Audio, visual, and output targets must all be selected.");
         }
@@ -87,17 +103,22 @@ public final class AvtohitProcessor {
 
         try {
             // Work from cache copies so SAF streams stay stable for FFmpeg and never leak raw provider paths.
+            log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
+            log(debugLogger, "audio_cache_bytes=" + audioFile.length());
+            log(debugLogger, "copy_visual_to_cache target=" + visualFile.getAbsolutePath());
             copyUriToFile(resolver, visualUri, visualFile);
+            log(debugLogger, "visual_cache_bytes=" + visualFile.length());
 
             VisualKind visualKind = detectVisualKind(resolver, visualUri, visualMimeType);
+            log(debugLogger, "visual_kind=" + visualKind);
             FFmpegSession session;
             boolean videoReencoded = visualKind == VisualKind.VIDEO;
 
             if (visualKind == VisualKind.IMAGE) {
-                session = execute(buildImageCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener);
+                session = execute("single_image", buildImageCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener, debugLogger);
             } else {
-                session = execute(buildVideoCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener);
+                session = execute("loop_video", buildVideoCommand(audioFile, visualFile, outputFile, exportProfile, frameRate), targetDurationMs, progressListener, debugLogger);
             }
 
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
@@ -108,6 +129,7 @@ public final class AvtohitProcessor {
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
+            log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
             return new Result(visualKind, videoReencoded, outputFile.length(), session.getOutput());
         } finally {
             deleteIfExists(audioFile);
@@ -127,11 +149,27 @@ public final class AvtohitProcessor {
             int slideSeconds,
             ProgressListener progressListener
     ) throws IOException, AvtohitException {
+        return renderImages(context, audioUri, imageUris, destinationUri, exportProfile, frameRate, targetDurationMs, slideSeconds, progressListener, null);
+    }
+
+    public Result renderImages(
+            Context context,
+            Uri audioUri,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            int slideSeconds,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
         if (imageUris == null || imageUris.isEmpty()) {
             throw new AvtohitException("At least one image must be selected.");
         }
         if (slideSeconds <= 0 || imageUris.size() == 1) {
-            return render(context, audioUri, imageUris.get(0), "image/*", destinationUri, exportProfile, frameRate, targetDurationMs, progressListener);
+            log(debugLogger, "slideshow_delegated_to_single_image slideSeconds=" + slideSeconds + " imageCount=" + imageUris.size());
+            return render(context, audioUri, imageUris.get(0), "image/*", destinationUri, exportProfile, frameRate, targetDurationMs, progressListener, debugLogger);
         }
         if (slideSeconds > 60) {
             throw new AvtohitException("Image time must be between 0 and 60 seconds.");
@@ -157,20 +195,31 @@ public final class AvtohitProcessor {
         ArrayList<File> imageFiles = new ArrayList<>();
 
         try {
+            log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
+            log(debugLogger, "audio_cache_bytes=" + audioFile.length());
             for (int i = 0; i < imageUris.size(); i++) {
                 Uri imageUri = imageUris.get(i);
                 File imageFile = new File(workDir, "image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
+                log(debugLogger, "copy_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
                 copyUriToFile(resolver, imageUri, imageFile);
+                log(debugLogger, "image_cache_bytes index=" + i + " bytes=" + imageFile.length());
                 imageFiles.add(imageFile);
             }
 
             long cycleDurationMs = (long) imageFiles.size() * slideSeconds * 1000L;
             long cycleProgressBudgetMs = Math.max(1L, targetDurationMs / 3L);
+            log(debugLogger, "slideshow_cycle imageCount=" + imageFiles.size()
+                    + " slideSeconds=" + slideSeconds
+                    + " cycleDurationMs=" + cycleDurationMs
+                    + " targetDurationMs=" + targetDurationMs
+                    + " cycleProgressBudgetMs=" + cycleProgressBudgetMs);
             FFmpegSession cycleSession = execute(
+                    "slideshow_cycle",
                     buildSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, slideSeconds),
                     cycleDurationMs,
-                    scaledProgressListener(progressListener, 0L, cycleProgressBudgetMs, cycleDurationMs, targetDurationMs)
+                    scaledProgressListener(progressListener, 0L, cycleProgressBudgetMs, cycleDurationMs, targetDurationMs),
+                    debugLogger
             );
             if (!ReturnCode.isSuccess(cycleSession.getReturnCode())) {
                 throw new AvtohitException("FFmpeg failed while preparing slideshow images: " + cycleSession.getOutput() + "\n" + cycleSession.getFailStackTrace());
@@ -178,11 +227,14 @@ public final class AvtohitProcessor {
             if (!cycleFile.exists() || cycleFile.length() <= 0L) {
                 throw new IOException("Prepared slideshow cycle was not created.");
             }
+            log(debugLogger, "slideshow_cycle_output_bytes=" + cycleFile.length());
 
             FFmpegSession session = execute(
+                    "loop_slideshow_to_audio",
                     buildLoopedSlideshowCommand(audioFile, cycleFile, outputFile, targetDurationMs),
                     targetDurationMs,
-                    scaledProgressListener(progressListener, cycleProgressBudgetMs, targetDurationMs - cycleProgressBudgetMs, targetDurationMs, targetDurationMs)
+                    scaledProgressListener(progressListener, cycleProgressBudgetMs, targetDurationMs - cycleProgressBudgetMs, targetDurationMs, targetDurationMs),
+                    debugLogger
             );
 
             if (!ReturnCode.isSuccess(session.getReturnCode())) {
@@ -193,6 +245,7 @@ public final class AvtohitProcessor {
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
+            log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
             return new Result(VisualKind.IMAGE, false, outputFile.length(), cycleSession.getOutput() + "\n" + session.getOutput());
         } finally {
             deleteIfExists(audioFile);
@@ -228,18 +281,35 @@ public final class AvtohitProcessor {
         }
     }
 
-    private static FFmpegSession execute(List<String> arguments, long targetDurationMs, ProgressListener progressListener) throws IOException {
+    private static FFmpegSession execute(
+            String phaseName,
+            List<String> arguments,
+            long targetDurationMs,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<FFmpegSession> sessionRef = new AtomicReference<>();
+        log(debugLogger, "ffmpeg_phase_start=" + phaseName + " targetDurationMs=" + targetDurationMs);
+        log(debugLogger, "ffmpeg_command=" + joinArguments(arguments));
+        long startedAt = System.currentTimeMillis();
+        long[] lastLoggedProgressMs = new long[]{-1L};
+        int[] lastLoggedPercent = new int[]{-1};
 
         FFmpegKit.executeWithArgumentsAsync(
                 arguments.toArray(new String[0]),
                 session -> {
                     sessionRef.set(session);
+                    log(debugLogger, "ffmpeg_phase_end=" + phaseName
+                            + " returnCode=" + session.getReturnCode()
+                            + " elapsedMs=" + (System.currentTimeMillis() - startedAt));
                     latch.countDown();
                 },
-                log -> { },
-                statistics -> publishProgress(statistics, targetDurationMs, progressListener)
+                ffmpegLog -> log(debugLogger, "ffmpeg[" + phaseName + "] " + ffmpegLog.getMessage()),
+                statistics -> {
+                    publishProgress(statistics, targetDurationMs, progressListener);
+                    publishLoggedProgress(phaseName, statistics, targetDurationMs, debugLogger, lastLoggedProgressMs, lastLoggedPercent);
+                }
         );
 
         try {
@@ -254,6 +324,34 @@ public final class AvtohitProcessor {
             throw new IOException("FFmpeg session finished without a result.");
         }
         return session;
+    }
+
+    private static void publishLoggedProgress(
+            String phaseName,
+            Statistics statistics,
+            long targetDurationMs,
+            AvtohitDebugLogger debugLogger,
+            long[] lastLoggedProgressMs,
+            int[] lastLoggedPercent
+    ) {
+        if (debugLogger == null || statistics == null || targetDurationMs <= 0L) {
+            return;
+        }
+        long statisticTimeMs = Math.round(statistics.getTime());
+        long currentMs = Math.min(Math.max(0L, statisticTimeMs), targetDurationMs);
+        int percent = (int) Math.min(100L, Math.max(0L, Math.round((currentMs * 100.0) / targetDurationMs)));
+        if (lastLoggedProgressMs[0] < 0L
+                || currentMs - lastLoggedProgressMs[0] >= 5000L
+                || percent - lastLoggedPercent[0] >= 5) {
+            lastLoggedProgressMs[0] = currentMs;
+            lastLoggedPercent[0] = percent;
+            log(debugLogger, "progress[" + phaseName + "] "
+                    + percent + "% currentMs=" + currentMs
+                    + " totalMs=" + targetDurationMs
+                    + " speed=" + statistics.getSpeed()
+                    + " fps=" + statistics.getVideoFps()
+                    + " sizeBytes=" + statistics.getSize());
+        }
     }
 
     private static void publishProgress(Statistics statistics, long targetDurationMs, ProgressListener progressListener) {
@@ -452,6 +550,23 @@ public final class AvtohitProcessor {
 
     private static String formatSeconds(long millis) {
         return String.format(Locale.US, "%.3f", Math.max(0L, millis) / 1000.0);
+    }
+
+    private static String joinArguments(List<String> arguments) {
+        StringBuilder builder = new StringBuilder();
+        for (String argument : arguments) {
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append('"').append(argument.replace("\"", "\\\"")).append('"');
+        }
+        return builder.toString();
+    }
+
+    private static void log(AvtohitDebugLogger debugLogger, String message) {
+        if (debugLogger != null) {
+            debugLogger.append(message);
+        }
     }
 
     private static VisualKind detectVisualKind(ContentResolver resolver, Uri uri, String givenMime) throws AvtohitException {
