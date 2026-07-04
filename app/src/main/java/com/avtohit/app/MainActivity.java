@@ -806,7 +806,18 @@ public final class MainActivity extends Activity {
                             selectedAutoSplitTime
                     );
                     AvtohitProcessor.Result result;
-                    if (selectedAudio == null && selectedVideoUris.size() > 1) {
+                    if (selectedAudio == null && !selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
+                        result = processor.renderImagesSilent(
+                                getApplicationContext(),
+                                selectedImageUris,
+                                destinationUri,
+                                selectedProfile,
+                                selectedFrameRate,
+                                selectedSlideSeconds,
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
+                                selectedLogger
+                        );
+                    } else if (selectedAudio == null && selectedVideoUris.size() > 1) {
                         result = processor.renderVideos(
                                 getApplicationContext(),
                                 selectedVideoUris,
@@ -926,7 +937,9 @@ public final class MainActivity extends Activity {
             mode = getString(R.string.mode_video);
         }
         String audioMode = !result.usesImportedMp3
+                ? (result.visualKind == AvtohitProcessor.VisualKind.VIDEO_SEQUENCE
                 ? getString(R.string.video_audio_merged)
+                : getString(R.string.no_audio))
                 : result.videoReencoded
                 ? getString(R.string.video_reencoded_mp3_copied)
                 : getString(R.string.mp3_copied);
@@ -952,7 +965,7 @@ public final class MainActivity extends Activity {
         String visualSummary = visualSummaryText();
         String audioSummary = audioDisplayName != null
                 ? audioDisplayName
-                : isVideoSequenceSelected() ? getString(R.string.mp3_not_needed) : getString(R.string.mp3_not_selected);
+                : (isVideoSequenceSelected() || isImageVisualSelected()) ? getString(R.string.mp3_not_needed) : getString(R.string.mp3_not_selected);
         String exportSummary = exportProfile.label + " - " + frameRate + "fps";
 
         visualChip.setText(ellipsize(visualSummary, 40));
@@ -960,6 +973,8 @@ public final class MainActivity extends Activity {
         audioChip.setText(ellipsize(audioSummary, 40));
         audioDurationLine.setText(isVideoSequenceSelected()
                 ? getString(R.string.video_sequence_audio_line)
+                : isPicturesOnlySelected()
+                ? getString(R.string.pictures_only_audio_line)
                 : audioDurationMs > 0L
                 ? getString(R.string.duration_value, formatDuration(audioDurationMs))
                 : getString(R.string.audio_choose_line));
@@ -997,8 +1012,16 @@ public final class MainActivity extends Activity {
         return visualIsVideo && visualVideoUris.size() > 1;
     }
 
+    private boolean isPicturesOnlySelected() {
+        return audioUri == null && isImageVisualSelected();
+    }
+
+    private boolean isPicturesOnlyReady() {
+        return isPicturesOnlySelected() && slideSeconds > 0;
+    }
+
     private boolean canStartMerge() {
-        return visualUri != null && (audioUri != null || isVideoSequenceSelected());
+        return visualUri != null && (audioUri != null || isVideoSequenceSelected() || isPicturesOnlyReady());
     }
 
     private String visualDetailLine() {
@@ -1023,7 +1046,7 @@ public final class MainActivity extends Activity {
     }
 
     private String imageChangeSummary() {
-        return imageChangeSummary(slideSeconds, autoSplitTime);
+        return imageChangeSummary(slideSeconds, autoSplitTime && audioUri != null);
     }
 
     private String imageChangeSummary(int seconds, boolean autoSplit) {
@@ -1035,8 +1058,8 @@ public final class MainActivity extends Activity {
 
     private void styleReadinessLabels() {
         styleReadinessLabel(visualReadiness, visualUri != null);
-        styleReadinessLabel(audioReadiness, audioUri != null || isVideoSequenceSelected());
-        styleReadinessLabel(exportReadiness, true);
+        styleReadinessLabel(audioReadiness, audioUri != null || isVideoSequenceSelected() || isImageVisualSelected());
+        styleReadinessLabel(exportReadiness, canStartMerge());
     }
 
     private void styleReadinessLabel(TextView label, boolean ready) {
@@ -1111,7 +1134,8 @@ public final class MainActivity extends Activity {
         imageTimeSeek.setVisibility(imageTimeVisibility);
         autoSplitTimeCheck.setVisibility(imageTimeVisibility);
         imageTimeSeek.setProgress(slideSeconds);
-        autoSplitTimeCheck.setChecked(autoSplitTime);
+        autoSplitTimeCheck.setEnabled(audioUri != null);
+        autoSplitTimeCheck.setChecked(audioUri != null && autoSplitTime);
         updateImageTimeValue(imageTimeSeek, imageTimeValue, autoSplitTimeCheck);
         updateExportSummary(dialogView, exportSummary);
 
@@ -1312,7 +1336,7 @@ public final class MainActivity extends Activity {
 
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
         slideSeconds = clampSlideSeconds(imageTimeSeek.getProgress());
-        autoSplitTime = autoSplitTimeCheck.isChecked();
+        autoSplitTime = audioUri != null && autoSplitTimeCheck.isChecked();
     }
 
     private void applySkinSelection(View dialogView) {

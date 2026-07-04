@@ -302,6 +302,83 @@ public final class AvtohitProcessor {
         }
     }
 
+    public Result renderImagesSilent(
+            Context context,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            int slideSeconds,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        if (imageUris == null || imageUris.isEmpty()) {
+            throw new AvtohitException("At least one image must be selected.");
+        }
+        if (slideSeconds <= 0) {
+            throw new AvtohitException("Image time must be above 0 seconds when no MP3 is selected.");
+        }
+        if (slideSeconds > 60) {
+            throw new AvtohitException("Image time must be between 0 and 60 seconds.");
+        }
+        if (destinationUri == null) {
+            throw new AvtohitException("Output target must be selected.");
+        }
+
+        ContentResolver resolver = context.getContentResolver();
+        File workDir = new File(context.getCacheDir(), "avtohit");
+        if (!workDir.exists() && !workDir.mkdirs()) {
+            throw new IOException("Could not create AVTOHIT cache directory.");
+        }
+
+        pruneStaleWorkFiles(workDir);
+        long runId = System.currentTimeMillis();
+        File outputFile = new File(workDir, "silent-images-" + runId + ".mp4");
+        ArrayList<File> imageFiles = new ArrayList<>();
+        long targetDurationMs = (long) imageUris.size() * slideSeconds * 1000L;
+
+        try {
+            log(debugLogger, "silent_slideshow imageCount=" + imageUris.size()
+                    + " slideSeconds=" + slideSeconds
+                    + " targetDurationMs=" + targetDurationMs
+                    + " frameRate=" + frameRate
+                    + " export=" + exportProfile.label);
+            for (int i = 0; i < imageUris.size(); i++) {
+                Uri imageUri = imageUris.get(i);
+                File imageFile = new File(workDir, "silent-image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
+                log(debugLogger, "copy_silent_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
+                copyUriToFile(resolver, imageUri, imageFile);
+                log(debugLogger, "silent_image_cache_bytes index=" + i + " bytes=" + imageFile.length());
+                imageFiles.add(imageFile);
+            }
+
+            FFmpegSession session = execute(
+                    "silent_slideshow",
+                    imageFiles.size() == 1
+                            ? buildSilentImageCommand(imageFiles.get(0), outputFile, exportProfile, frameRate, slideSeconds)
+                            : buildSlideshowCycleCommand(imageFiles, outputFile, exportProfile, frameRate, slideSeconds),
+                    targetDurationMs,
+                    progressListener,
+                    debugLogger
+            );
+            if (!ReturnCode.isSuccess(session.getReturnCode())) {
+                throw new AvtohitException("FFmpeg failed while creating silent slideshow: " + session.getOutput() + "\n" + session.getFailStackTrace());
+            }
+            if (!outputFile.exists() || outputFile.length() <= 0L) {
+                throw new IOException("Silent video file was not created.");
+            }
+
+            copyFileToUri(resolver, outputFile, destinationUri);
+            log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
+            return new Result(VisualKind.IMAGE, false, false, outputFile.length(), session.getOutput());
+        } finally {
+            deleteIfExists(outputFile);
+            for (File imageFile : imageFiles) {
+                deleteIfExists(imageFile);
+            }
+        }
+    }
+
     public Result renderVideos(
             Context context,
             List<Uri> videoUris,
@@ -678,6 +755,35 @@ public final class AvtohitProcessor {
         args.add(filter.toString());
         args.add("-map");
         args.add("[v]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-an");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildSilentImageCommand(
+            File imageFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            int slideSeconds
+    ) {
+        List<String> args = baseArgs();
+        args.add("-loop");
+        args.add("1");
+        args.add("-framerate");
+        args.add(String.valueOf(frameRate));
+        args.add("-t");
+        args.add(formatSeconds(slideSeconds * 1000L));
+        args.add("-i");
+        args.add(imageFile.getAbsolutePath());
+        args.add("-vf");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
         args.add("-c:v");
         args.add("mpeg4");
         args.add("-q:v");
