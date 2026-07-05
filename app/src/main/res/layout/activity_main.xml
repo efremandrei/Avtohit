@@ -391,6 +391,19 @@
             </LinearLayout>
             </LinearLayout>
 
+            <ProgressBar
+                android:id="@+id/progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="12dp"
+                android:layout_marginTop="18dp"
+                android:indeterminate="false"
+                android:max="1000"
+                android:progress="0"
+                android:progressBackgroundTint="@color/avtohit_disabled_tint"
+                android:progressTint="@color/avtohit_positive"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/previewCard"
                 android:layout_width="match_parent"
@@ -514,19 +527,6 @@
                 </LinearLayout>
             </FrameLayout>
             </LinearLayout>
-
-            <ProgressBar
-                android:id="@+id/progress"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="12dp"
-                android:layout_marginTop="18dp"
-                android:indeterminate="false"
-                android:max="1000"
-                android:progress="0"
-                android:progressBackgroundTint="@color/avtohit_disabled_tint"
-                android:progressTint="@color/avtohit_positive"
-                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 
