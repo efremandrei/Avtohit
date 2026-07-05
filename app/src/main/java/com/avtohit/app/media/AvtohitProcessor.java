@@ -3,6 +3,8 @@ package com.avtohit.app.media;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
@@ -111,20 +113,27 @@ public final class AvtohitProcessor {
         pruneStaleWorkFiles(workDir);
         long runId = System.currentTimeMillis();
         File audioFile = new File(workDir, "audio-" + runId + ".mp3");
-        File visualFile = new File(workDir, "visual-" + runId + "." + visualExtension(resolver, visualUri, visualMimeType));
         File outputFile = new File(workDir, "output-" + runId + ".mp4");
+        VisualKind visualKind = detectVisualKind(resolver, visualUri, visualMimeType);
+        File visualFile = new File(workDir, "visual-" + runId + "." + (visualKind == VisualKind.IMAGE
+                ? "jpg"
+                : visualExtension(resolver, visualUri, visualMimeType)));
 
         try {
             // Work from cache copies so SAF streams stay stable for FFmpeg and never leak raw provider paths.
             log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
             log(debugLogger, "audio_cache_bytes=" + audioFile.length());
-            log(debugLogger, "copy_visual_to_cache target=" + visualFile.getAbsolutePath());
-            copyUriToFile(resolver, visualUri, visualFile);
+            log(debugLogger, "visual_kind=" + visualKind);
+            if (visualKind == VisualKind.IMAGE) {
+                log(debugLogger, "normalize_visual_image_to_cache target=" + visualFile.getAbsolutePath());
+                prepareImageForFfmpeg(resolver, visualUri, visualFile, exportProfile, debugLogger, "visual_image", 0);
+            } else {
+                log(debugLogger, "copy_visual_to_cache target=" + visualFile.getAbsolutePath());
+                copyUriToFile(resolver, visualUri, visualFile);
+            }
             log(debugLogger, "visual_cache_bytes=" + visualFile.length());
 
-            VisualKind visualKind = detectVisualKind(resolver, visualUri, visualMimeType);
-            log(debugLogger, "visual_kind=" + visualKind);
             FFmpegSession session;
             boolean videoReencoded = visualKind == VisualKind.VIDEO;
 
@@ -240,9 +249,9 @@ public final class AvtohitProcessor {
                     + " autoSplitTime=" + useAutoSplit);
             for (int i = 0; i < cycleImageCount; i++) {
                 Uri imageUri = imageUris.get(i);
-                File imageFile = new File(workDir, "image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
-                log(debugLogger, "copy_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
-                copyUriToFile(resolver, imageUri, imageFile);
+                File imageFile = new File(workDir, "image-" + runId + "-" + i + ".jpg");
+                log(debugLogger, "normalize_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
+                prepareImageForFfmpeg(resolver, imageUri, imageFile, exportProfile, debugLogger, "image", i);
                 log(debugLogger, "image_cache_bytes index=" + i + " bytes=" + imageFile.length());
                 imageFiles.add(imageFile);
             }
@@ -345,9 +354,9 @@ public final class AvtohitProcessor {
                     + " export=" + exportProfile.label);
             for (int i = 0; i < imageUris.size(); i++) {
                 Uri imageUri = imageUris.get(i);
-                File imageFile = new File(workDir, "silent-image-" + runId + "-" + i + "." + visualExtension(resolver, imageUri, resolver.getType(imageUri)));
-                log(debugLogger, "copy_silent_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
-                copyUriToFile(resolver, imageUri, imageFile);
+                File imageFile = new File(workDir, "silent-image-" + runId + "-" + i + ".jpg");
+                log(debugLogger, "normalize_silent_image_to_cache index=" + i + " target=" + imageFile.getAbsolutePath());
+                prepareImageForFfmpeg(resolver, imageUri, imageFile, exportProfile, debugLogger, "silent_image", i);
                 log(debugLogger, "silent_image_cache_bytes index=" + i + " bytes=" + imageFile.length());
                 imageFiles.add(imageFile);
             }
@@ -990,6 +999,79 @@ public final class AvtohitProcessor {
         try (InputStream in = input; OutputStream out = new FileOutputStream(target)) {
             copy(in, out);
         }
+    }
+
+    private static void prepareImageForFfmpeg(
+            ContentResolver resolver,
+            Uri imageUri,
+            File target,
+            ExportProfile exportProfile,
+            AvtohitDebugLogger debugLogger,
+            String label,
+            int index
+    ) throws IOException, AvtohitException {
+        Bitmap bitmap = decodeScaledBitmap(resolver, imageUri, exportProfile);
+        if (bitmap == null) {
+            throw new AvtohitException("Image " + (index + 1) + " could not be decoded. Re-save it as JPG or PNG and try again.");
+        }
+
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        try (OutputStream output = new FileOutputStream(target)) {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, output)) {
+                throw new IOException("Could not normalize selected image.");
+            }
+            output.flush();
+        } finally {
+            bitmap.recycle();
+        }
+        if (!target.exists() || target.length() <= 0L) {
+            throw new IOException("Normalized image file was not created.");
+        }
+        log(debugLogger, label + "_normalized_jpeg index=" + index
+                + " width=" + width
+                + " height=" + height
+                + " bytes=" + target.length());
+    }
+
+    private static Bitmap decodeScaledBitmap(ContentResolver resolver, Uri imageUri, ExportProfile exportProfile) throws IOException {
+        BitmapFactory.Options boundsOptions = new BitmapFactory.Options();
+        boundsOptions.inJustDecodeBounds = true;
+        try (InputStream boundsInput = openInput(resolver, imageUri)) {
+            BitmapFactory.decodeStream(boundsInput, null, boundsOptions);
+        }
+        if (boundsOptions.outWidth <= 0 || boundsOptions.outHeight <= 0) {
+            return null;
+        }
+
+        BitmapFactory.Options decodeOptions = new BitmapFactory.Options();
+        decodeOptions.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        decodeOptions.inSampleSize = imageSampleSize(
+                boundsOptions.outWidth,
+                boundsOptions.outHeight,
+                Math.max(exportProfile.width, exportProfile.height)
+        );
+        try (InputStream decodeInput = openInput(resolver, imageUri)) {
+            return BitmapFactory.decodeStream(decodeInput, null, decodeOptions);
+        }
+    }
+
+    private static InputStream openInput(ContentResolver resolver, Uri sourceUri) throws IOException {
+        InputStream input = resolver.openInputStream(sourceUri);
+        if (input == null) {
+            throw new IOException("Could not open selected input.");
+        }
+        return input;
+    }
+
+    private static int imageSampleSize(int width, int height, int targetMaxDimension) {
+        int sampleSize = 1;
+        int sourceMax = Math.max(width, height);
+        int allowedMax = Math.max(1, targetMaxDimension) * 2;
+        while (sourceMax / sampleSize > allowedMax && sampleSize < 64) {
+            sampleSize *= 2;
+        }
+        return sampleSize;
     }
 
     private static void copyFileToUri(ContentResolver resolver, File sourceFile, Uri destinationUri) throws IOException {
