@@ -139,8 +139,12 @@
                 android:orientation="vertical">
 
                 <LinearLayout
+                    android:id="@+id/visualSummaryRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:minHeight="88dp"
                     android:orientation="horizontal">
@@ -222,8 +226,12 @@
                     android:background="@color/avtohit_border" />
 
                 <LinearLayout
+                    android:id="@+id/audioSummaryRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:minHeight="88dp"
                     android:orientation="horizontal">
@@ -305,8 +313,12 @@
                     android:background="@color/avtohit_border" />
 
                 <LinearLayout
+                    android:id="@+id/exportSummaryRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:minHeight="88dp"
                     android:orientation="horizontal">

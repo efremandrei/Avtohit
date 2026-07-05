@@ -245,6 +245,9 @@ public final class MainActivity extends Activity {
     private View statusBarSpacer;
     private View projectSummaryCard;
     private View previewCard;
+    private View visualSummaryRow;
+    private View audioSummaryRow;
+    private View exportSummaryRow;
     private View summaryDividerOne;
     private View summaryDividerTwo;
 
@@ -388,6 +391,9 @@ public final class MainActivity extends Activity {
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         previewCard = findViewById(R.id.previewCard);
+        visualSummaryRow = findViewById(R.id.visualSummaryRow);
+        audioSummaryRow = findViewById(R.id.audioSummaryRow);
+        exportSummaryRow = findViewById(R.id.exportSummaryRow);
         summaryDividerOne = findViewById(R.id.summaryDividerOne);
         summaryDividerTwo = findViewById(R.id.summaryDividerTwo);
     }
@@ -396,6 +402,9 @@ public final class MainActivity extends Activity {
         selectVisualButton.setOnClickListener(view -> openVisualPicker());
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         exportButton.setOnClickListener(view -> showExportDialog(true));
+        visualSummaryRow.setOnClickListener(view -> openVisualPicker());
+        audioSummaryRow.setOnClickListener(view -> openAudioPicker());
+        exportSummaryRow.setOnClickListener(view -> showExportDialog(true));
         playButton.setOnClickListener(view -> togglePreviewPlayback());
         helpButton.setOnClickListener(view -> showHelpDialog());
         skinButton.setOnClickListener(view -> showSkinDialog());
@@ -1104,6 +1113,9 @@ public final class MainActivity extends Activity {
         selectVisualButton.setSelected(visualUri != null);
         selectAudioButton.setSelected(audioUri != null);
         exportButton.setEnabled(canOpenMergeMenu);
+        visualSummaryRow.setEnabled(!rendering);
+        audioSummaryRow.setEnabled(!rendering);
+        exportSummaryRow.setEnabled(canOpenMergeMenu);
         helpButton.setEnabled(true);
         skinButton.setEnabled(true);
         aboutButton.setEnabled(true);
