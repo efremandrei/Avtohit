@@ -51,11 +51,11 @@ public final class AvtohitDebugLogger {
                 .append("log_location=")
                 .append(displayLocation())
                 .append("\n\n");
-        write(builder.toString(), true);
+        write(builder.toString());
     }
 
     public synchronized void append(String message) {
-        write(timestamp() + "  " + safe(message) + "\n", true);
+        write(timestamp() + "  " + safe(message) + "\n");
     }
 
     public synchronized void append(Throwable error) {
@@ -78,10 +78,10 @@ public final class AvtohitDebugLogger {
         return new File(fallbackLogDirectory(), LOG_FILE_NAME).getAbsolutePath();
     }
 
-    private void write(String text, boolean append) {
+    private void write(String text) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                writeToDownloads(text, append);
+                writeToDownloads(text);
                 return;
             }
         } catch (IOException | RuntimeException ignored) {
@@ -89,17 +89,16 @@ public final class AvtohitDebugLogger {
         }
 
         try {
-            writeToFallbackFile(text, append);
+            writeToFallbackFile(text);
         } catch (IOException | RuntimeException ignored) {
             // Logging must never make media rendering fail.
         }
     }
 
     @TargetApi(Build.VERSION_CODES.Q)
-    private void writeToDownloads(String text, boolean append) throws IOException {
+    private void writeToDownloads(String text) throws IOException {
         Uri uri = findOrCreateDownloadsLog();
-        String mode = append ? "wa" : "rwt";
-        try (OutputStream output = appContext.getContentResolver().openOutputStream(uri, mode)) {
+        try (OutputStream output = appContext.getContentResolver().openOutputStream(uri, "wa")) {
             if (output == null) {
                 throw new IOException("Could not open debug log output stream.");
             }
@@ -113,7 +112,7 @@ public final class AvtohitDebugLogger {
         ContentResolver resolver = appContext.getContentResolver();
         Uri collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
         String relativePath = Environment.DIRECTORY_DOWNLOADS + "/" + LOG_DIR_NAME + "/";
-        String[] projection = new String[]{MediaStore.Downloads._ID};
+        String[] projection = new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.RELATIVE_PATH};
         String selection = MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + "=?";
         String[] args = new String[]{LOG_FILE_NAME, relativePath};
 
@@ -122,6 +121,11 @@ public final class AvtohitDebugLogger {
                 long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
                 return ContentUris.withAppendedId(collection, id);
             }
+        }
+
+        Uri existingWithEquivalentPath = findExistingDownloadsLogByName(resolver, collection, relativePath);
+        if (existingWithEquivalentPath != null) {
+            return existingWithEquivalentPath;
         }
 
         ContentValues values = new ContentValues();
@@ -135,13 +139,35 @@ public final class AvtohitDebugLogger {
         return created;
     }
 
-    private void writeToFallbackFile(String text, boolean append) throws IOException {
+    @TargetApi(Build.VERSION_CODES.Q)
+    private Uri findExistingDownloadsLogByName(ContentResolver resolver, Uri collection, String expectedRelativePath) {
+        String[] projection = new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.RELATIVE_PATH};
+        String selection = MediaStore.Downloads.DISPLAY_NAME + "=?";
+        String[] args = new String[]{LOG_FILE_NAME};
+        String sortOrder = MediaStore.Downloads.DATE_MODIFIED + " DESC";
+
+        try (Cursor cursor = resolver.query(collection, projection, selection, args, sortOrder)) {
+            if (cursor == null) {
+                return null;
+            }
+            while (cursor.moveToNext()) {
+                String relativePath = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Downloads.RELATIVE_PATH));
+                if (isAvtohitLogPath(relativePath, expectedRelativePath)) {
+                    long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                    return ContentUris.withAppendedId(collection, id);
+                }
+            }
+        }
+        return null;
+    }
+
+    private void writeToFallbackFile(String text) throws IOException {
         File file = new File(fallbackLogDirectory(), LOG_FILE_NAME);
         File parent = file.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("Could not create debug log directory.");
         }
-        try (OutputStream output = new FileOutputStream(file, append)) {
+        try (OutputStream output = new FileOutputStream(file, true)) {
             output.write(text.getBytes(StandardCharsets.UTF_8));
         }
         lastKnownLocation = file.getAbsolutePath();
@@ -161,5 +187,28 @@ public final class AvtohitDebugLogger {
 
     private static String safe(String value) {
         return value == null ? "" : value.replace('\r', ' ').replace('\n', ' ').trim();
+    }
+
+    private static boolean isAvtohitLogPath(String candidatePath, String expectedRelativePath) {
+        if (candidatePath == null || candidatePath.trim().isEmpty()) {
+            return false;
+        }
+        String candidate = normalizePath(candidatePath);
+        String expected = normalizePath(expectedRelativePath);
+        return candidate.equals(expected)
+                || candidate.equals(trimTrailingSlash(expected))
+                || candidate.endsWith("/" + LOG_DIR_NAME + "/")
+                || candidate.endsWith("/" + LOG_DIR_NAME);
+    }
+
+    private static String normalizePath(String value) {
+        return value.replace('\\', '/').trim();
+    }
+
+    private static String trimTrailingSlash(String value) {
+        if (value.endsWith("/")) {
+            return value.substring(0, value.length() - 1);
+        }
+        return value;
     }
 }
