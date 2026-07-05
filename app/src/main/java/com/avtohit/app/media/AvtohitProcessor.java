@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
@@ -69,6 +71,22 @@ public final class AvtohitProcessor {
 
     public interface ProgressListener {
         void onProgress(long currentMs, long totalMs);
+    }
+
+    private interface PairwiseCommandBuilder {
+        List<String> build(File leftFile, File rightFile, File outputFile);
+    }
+
+    private static final class TimedClip {
+        final File file;
+        final long durationMs;
+        final long sortKey;
+
+        TimedClip(File file, long durationMs, long sortKey) {
+            this.file = file;
+            this.durationMs = Math.max(1L, durationMs);
+            this.sortKey = sortKey;
+        }
     }
 
     public Result render(
@@ -266,18 +284,20 @@ public final class AvtohitProcessor {
                     + " cycleDurationMs=" + cycleDurationMs
                     + " targetDurationMs=" + targetDurationMs
                     + " cycleProgressBudgetMs=" + cycleProgressBudgetMs);
-            FFmpegSession cycleSession = execute(
-                    "slideshow_cycle",
-                    useAutoSplit
-                            ? buildAutoSplitSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, targetDurationMs, debugLogger)
-                            : buildSlideshowCycleCommand(imageFiles, cycleFile, exportProfile, frameRate, slideSeconds),
-                    cycleDurationMs,
-                    scaledProgressListener(progressListener, 0L, cycleProgressBudgetMs, cycleDurationMs, targetDurationMs),
+            String cycleOutput = buildSlideshowCyclePairwise(
+                    workDir,
+                    runId,
+                    imageFiles,
+                    cycleFile,
+                    exportProfile,
+                    frameRate,
+                    slideshowDurationsMs(imageFiles.size(), slideSeconds, useAutoSplit ? targetDurationMs : 0L, debugLogger),
+                    progressListener,
+                    0L,
+                    cycleProgressBudgetMs,
+                    targetDurationMs,
                     debugLogger
             );
-            if (!ReturnCode.isSuccess(cycleSession.getReturnCode())) {
-                throw new AvtohitException("FFmpeg failed while preparing slideshow images: " + cycleSession.getOutput() + "\n" + cycleSession.getFailStackTrace());
-            }
             if (!cycleFile.exists() || cycleFile.length() <= 0L) {
                 throw new IOException("Prepared slideshow cycle was not created.");
             }
@@ -300,7 +320,7 @@ public final class AvtohitProcessor {
 
             copyFileToUri(resolver, outputFile, destinationUri);
             log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
-            return new Result(VisualKind.IMAGE, false, outputFile.length(), cycleSession.getOutput() + "\n" + session.getOutput());
+            return new Result(VisualKind.IMAGE, false, outputFile.length(), cycleOutput + "\n" + session.getOutput());
         } finally {
             deleteIfExists(audioFile);
             deleteIfExists(outputFile);
@@ -361,25 +381,27 @@ public final class AvtohitProcessor {
                 imageFiles.add(imageFile);
             }
 
-            FFmpegSession session = execute(
-                    "silent_slideshow",
-                    imageFiles.size() == 1
-                            ? buildSilentImageCommand(imageFiles.get(0), outputFile, exportProfile, frameRate, slideSeconds)
-                            : buildSlideshowCycleCommand(imageFiles, outputFile, exportProfile, frameRate, slideSeconds),
-                    targetDurationMs,
+            String output = buildSlideshowCyclePairwise(
+                    workDir,
+                    runId,
+                    imageFiles,
+                    outputFile,
+                    exportProfile,
+                    frameRate,
+                    slideshowDurationsMs(imageFiles.size(), slideSeconds, 0L, debugLogger),
                     progressListener,
+                    0L,
+                    targetDurationMs,
+                    targetDurationMs,
                     debugLogger
             );
-            if (!ReturnCode.isSuccess(session.getReturnCode())) {
-                throw new AvtohitException("FFmpeg failed while creating silent slideshow: " + session.getOutput() + "\n" + session.getFailStackTrace());
-            }
             if (!outputFile.exists() || outputFile.length() <= 0L) {
                 throw new IOException("Silent video file was not created.");
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
             log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
-            return new Result(VisualKind.IMAGE, false, false, outputFile.length(), session.getOutput());
+            return new Result(VisualKind.IMAGE, false, false, outputFile.length(), output);
         } finally {
             deleteIfExists(outputFile);
             for (File imageFile : imageFiles) {
@@ -394,6 +416,7 @@ public final class AvtohitProcessor {
             Uri destinationUri,
             ExportProfile exportProfile,
             int frameRate,
+            List<Long> videoDurationsMs,
             long targetDurationMs,
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
@@ -415,6 +438,9 @@ public final class AvtohitProcessor {
         long runId = System.currentTimeMillis();
         File outputFile = new File(workDir, "output-video-sequence-" + runId + ".mp4");
         ArrayList<File> videoFiles = new ArrayList<>();
+        ArrayList<TimedClip> videoClips = new ArrayList<>();
+        ArrayList<File> pairwiseTempFiles = new ArrayList<>();
+        long reportedVideoDurationMs = Math.max(1L, targetDurationMs);
 
         try {
             log(debugLogger, "video_sequence_input_count=" + videoUris.size()
@@ -428,29 +454,39 @@ public final class AvtohitProcessor {
                 copyUriToFile(resolver, videoUri, videoFile);
                 log(debugLogger, "video_cache_bytes index=" + i + " bytes=" + videoFile.length());
                 videoFiles.add(videoFile);
+                videoClips.add(new TimedClip(videoFile, videoDurationAt(videoDurationsMs, i, targetDurationMs, videoUris.size()), i));
             }
 
-            FFmpegSession session = execute(
-                    "concat_videos",
-                    buildVideoSequenceCommand(videoFiles, outputFile, exportProfile, frameRate),
-                    targetDurationMs,
+            String output = reduceTimedClipsPairwise(
+                    "concat_video_pair",
+                    videoClips,
+                    outputFile,
+                    workDir,
+                    runId,
                     progressListener,
+                    0L,
+                    reportedVideoDurationMs,
+                    reportedVideoDurationMs,
+                    pairwiseWorkMs(videoClips),
+                    new long[]{0L},
+                    pairwiseTempFiles,
+                    (leftFile, rightFile, pairOutputFile) -> buildVideoPairCommand(leftFile, rightFile, pairOutputFile, exportProfile, frameRate),
                     debugLogger
             );
-            if (!ReturnCode.isSuccess(session.getReturnCode())) {
-                throw new AvtohitException("FFmpeg failed while merging videos: " + session.getOutput() + "\n" + session.getFailStackTrace());
-            }
             if (!outputFile.exists() || outputFile.length() <= 0L) {
                 throw new IOException("Merged video file was not created.");
             }
 
             copyFileToUri(resolver, outputFile, destinationUri);
             log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
-            return new Result(VisualKind.VIDEO_SEQUENCE, true, false, outputFile.length(), session.getOutput());
+            return new Result(VisualKind.VIDEO_SEQUENCE, true, false, outputFile.length(), output);
         } finally {
             deleteIfExists(outputFile);
             for (File videoFile : videoFiles) {
                 deleteIfExists(videoFile);
+            }
+            for (File tempFile : pairwiseTempFiles) {
+                deleteIfExists(tempFile);
             }
         }
     }
@@ -591,6 +627,279 @@ public final class AvtohitProcessor {
         return (int) Math.min(selectedImageCount, Math.min((long) Integer.MAX_VALUE, imagesThatCanAppear));
     }
 
+    private static List<Long> slideshowDurationsMs(
+            int imageCount,
+            int slideSeconds,
+            long autoSplitTargetDurationMs,
+            AvtohitDebugLogger debugLogger
+    ) {
+        if (autoSplitTargetDurationMs > 0L) {
+            List<Long> durations = splitDurationAcrossImages(autoSplitTargetDurationMs, imageCount);
+            log(debugLogger, "auto_split_plan imageCount=" + imageCount
+                    + " targetDurationMs=" + autoSplitTargetDurationMs
+                    + " firstImageDurationMs=" + (durations.isEmpty() ? 0L : durations.get(0)));
+            return durations;
+        }
+
+        ArrayList<Long> durations = new ArrayList<>();
+        long durationMs = Math.max(1L, (long) slideSeconds * 1000L);
+        for (int i = 0; i < imageCount; i++) {
+            durations.add(durationMs);
+        }
+        return durations;
+    }
+
+    private static String buildSlideshowCyclePairwise(
+            File workDir,
+            long runId,
+            List<File> imageFiles,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            List<Long> durationsMs,
+            ProgressListener progressListener,
+            long progressOffsetMs,
+            long progressSpanMs,
+            long reportedTotalMs,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        if (imageFiles == null || imageFiles.isEmpty()) {
+            throw new AvtohitException("At least one image must be selected.");
+        }
+        ArrayList<TimedClip> clips = new ArrayList<>();
+        ArrayList<Long> safeDurationsMs = new ArrayList<>();
+        for (int i = 0; i < imageFiles.size(); i++) {
+            safeDurationsMs.add(durationAt(durationsMs, i, 1000L));
+        }
+
+        long totalWorkMs = pairwiseWorkMsFromDurations(safeDurationsMs);
+        long[] completedWorkMs = new long[]{0L};
+        ArrayList<File> temporaryFiles = new ArrayList<>();
+        StringBuilder output = new StringBuilder();
+        log(debugLogger, "pairwise_slideshow_start imageCount=" + imageFiles.size()
+                + " totalWorkMs=" + totalWorkMs
+                + " progressSpanMs=" + progressSpanMs);
+
+        try {
+            for (int i = 0; i < imageFiles.size(); i++) {
+                long durationMs = safeDurationsMs.get(i);
+                boolean singleImageOutput = imageFiles.size() == 1;
+                File segmentFile = singleImageOutput
+                        ? outputFile
+                        : new File(workDir, "slide-segment-" + runId + "-" + i + ".mp4");
+                FFmpegSession segmentSession = execute(
+                        "slideshow_segment_" + i,
+                        buildImageSegmentCommand(imageFiles.get(i), segmentFile, exportProfile, frameRate, durationMs),
+                        durationMs,
+                        pairwiseStepProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, completedWorkMs[0], durationMs, durationMs),
+                        debugLogger
+                );
+                ensureSuccessfulSession(segmentSession, "FFmpeg failed while preparing slideshow image segment.");
+                ensureOutputFile(segmentFile, "Prepared slideshow image segment was not created.");
+                appendSessionOutput(output, segmentSession);
+                completedWorkMs[0] += durationMs;
+                publishPairwiseProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, completedWorkMs[0]);
+
+                if (!singleImageOutput) {
+                    temporaryFiles.add(segmentFile);
+                    clips.add(new TimedClip(segmentFile, durationMs, i));
+                }
+            }
+
+            if (imageFiles.size() == 1) {
+                publishPairwiseProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, totalWorkMs);
+                return output.toString();
+            }
+
+            output.append(reduceTimedClipsPairwise(
+                    "slideshow_pair",
+                    clips,
+                    outputFile,
+                    workDir,
+                    runId,
+                    progressListener,
+                    progressOffsetMs,
+                    progressSpanMs,
+                    reportedTotalMs,
+                    totalWorkMs,
+                    completedWorkMs,
+                    temporaryFiles,
+                    AvtohitProcessor::buildSilentVideoPairCommand,
+                    debugLogger
+            ));
+            return output.toString();
+        } finally {
+            for (File temporaryFile : temporaryFiles) {
+                if (!sameFile(temporaryFile, outputFile)) {
+                    deleteIfExists(temporaryFile);
+                }
+            }
+        }
+    }
+
+    private static String reduceTimedClipsPairwise(
+            String phasePrefix,
+            ArrayList<TimedClip> clips,
+            File outputFile,
+            File workDir,
+            long runId,
+            ProgressListener progressListener,
+            long progressOffsetMs,
+            long progressSpanMs,
+            long reportedTotalMs,
+            long totalWorkMs,
+            long[] completedWorkMs,
+            ArrayList<File> temporaryFiles,
+            PairwiseCommandBuilder commandBuilder,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        StringBuilder output = new StringBuilder();
+        int step = 0;
+        sortTimedClips(clips);
+        log(debugLogger, phasePrefix + "_start clipCount=" + clips.size());
+        while (clips.size() > 1) {
+            sortTimedClips(clips);
+            TimedClip left = clips.remove(0);
+            TimedClip right = clips.remove(0);
+            long mergedDurationMs = Math.max(1L, left.durationMs + right.durationMs);
+            boolean finalStep = clips.isEmpty();
+            File pairOutputFile = finalStep
+                    ? outputFile
+                    : new File(workDir, phasePrefix + "-" + runId + "-" + right.sortKey + "-" + step + ".mp4");
+            if (!finalStep && temporaryFiles != null) {
+                temporaryFiles.add(pairOutputFile);
+            }
+            log(debugLogger, phasePrefix + "_step=" + step
+                    + " left=" + left.file.getName()
+                    + " right=" + right.file.getName()
+                    + " output=" + pairOutputFile.getName()
+                    + " outputSortKey=" + right.sortKey
+                    + " mergedDurationMs=" + mergedDurationMs
+                    + " remainingAfterPair=" + clips.size());
+            FFmpegSession session = execute(
+                    phasePrefix + "_" + step,
+                    commandBuilder.build(left.file, right.file, pairOutputFile),
+                    mergedDurationMs,
+                    pairwiseStepProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, completedWorkMs[0], mergedDurationMs, mergedDurationMs),
+                    debugLogger
+            );
+            ensureSuccessfulSession(session, "FFmpeg failed while merging pairwise clips.");
+            ensureOutputFile(pairOutputFile, "Pairwise merged video file was not created.");
+            appendSessionOutput(output, session);
+            deleteIfExists(left.file);
+            deleteIfExists(right.file);
+            clips.add(new TimedClip(pairOutputFile, mergedDurationMs, right.sortKey));
+            completedWorkMs[0] += mergedDurationMs;
+            publishPairwiseProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, completedWorkMs[0]);
+            step++;
+        }
+        publishPairwiseProgress(progressListener, progressOffsetMs, progressSpanMs, reportedTotalMs, totalWorkMs, totalWorkMs);
+        return output.toString();
+    }
+
+    private static void sortTimedClips(ArrayList<TimedClip> clips) {
+        Collections.sort(clips, Comparator.comparingLong(clip -> clip.sortKey));
+    }
+
+    private static long pairwiseWorkMsFromDurations(List<Long> durationsMs) {
+        ArrayList<Long> queue = new ArrayList<>();
+        long total = 0L;
+        if (durationsMs != null) {
+            for (Long durationMs : durationsMs) {
+                long safeDurationMs = Math.max(1L, durationMs != null ? durationMs : 1L);
+                queue.add(safeDurationMs);
+                total += safeDurationMs;
+            }
+        }
+        while (queue.size() > 1) {
+            long mergedDurationMs = Math.max(1L, queue.remove(0) + queue.remove(0));
+            total += mergedDurationMs;
+            queue.add(0, mergedDurationMs);
+        }
+        return Math.max(1L, total);
+    }
+
+    private static long pairwiseWorkMs(List<TimedClip> clips) {
+        ArrayList<Long> durationsMs = new ArrayList<>();
+        if (clips != null) {
+            for (TimedClip clip : clips) {
+                durationsMs.add(clip.durationMs);
+            }
+        }
+        return pairwiseWorkMsFromDurations(durationsMs);
+    }
+
+    private static ProgressListener pairwiseStepProgress(
+            ProgressListener delegate,
+            long progressOffsetMs,
+            long progressSpanMs,
+            long reportedTotalMs,
+            long totalWorkMs,
+            long completedWorkMs,
+            long stepWorkMs,
+            long stepDurationMs
+    ) {
+        long stepOffsetMs = progressOffsetMs + scalePairwiseProgress(completedWorkMs, totalWorkMs, progressSpanMs);
+        long stepSpanMs = Math.max(1L, scalePairwiseProgress(stepWorkMs, totalWorkMs, progressSpanMs));
+        return scaledProgressListener(delegate, stepOffsetMs, stepSpanMs, stepDurationMs, reportedTotalMs);
+    }
+
+    private static void publishPairwiseProgress(
+            ProgressListener delegate,
+            long progressOffsetMs,
+            long progressSpanMs,
+            long reportedTotalMs,
+            long totalWorkMs,
+            long completedWorkMs
+    ) {
+        if (delegate == null) {
+            return;
+        }
+        long currentMs = progressOffsetMs + scalePairwiseProgress(completedWorkMs, totalWorkMs, progressSpanMs);
+        long maxMs = progressOffsetMs + Math.max(1L, progressSpanMs);
+        delegate.onProgress(Math.min(currentMs, maxMs), Math.max(1L, reportedTotalMs));
+    }
+
+    private static long scalePairwiseProgress(long workMs, long totalWorkMs, long progressSpanMs) {
+        long safeTotalWorkMs = Math.max(1L, totalWorkMs);
+        long safeProgressSpanMs = Math.max(1L, progressSpanMs);
+        return Math.round((Math.max(0L, workMs) / (double) safeTotalWorkMs) * safeProgressSpanMs);
+    }
+
+    private static long durationAt(List<Long> durationsMs, int index, long fallbackDurationMs) {
+        if (durationsMs != null && index >= 0 && index < durationsMs.size()) {
+            Long durationMs = durationsMs.get(index);
+            if (durationMs != null && durationMs > 0L) {
+                return durationMs;
+            }
+        }
+        return Math.max(1L, fallbackDurationMs);
+    }
+
+    private static long videoDurationAt(List<Long> durationsMs, int index, long totalDurationMs, int itemCount) {
+        long fallbackDurationMs = Math.max(1L, totalDurationMs / Math.max(1, itemCount));
+        return durationAt(durationsMs, index, fallbackDurationMs);
+    }
+
+    private static void ensureSuccessfulSession(FFmpegSession session, String message) throws AvtohitException {
+        if (!ReturnCode.isSuccess(session.getReturnCode())) {
+            throw new AvtohitException(message + " " + session.getOutput() + "\n" + session.getFailStackTrace());
+        }
+    }
+
+    private static void ensureOutputFile(File outputFile, String message) throws IOException {
+        if (!outputFile.exists() || outputFile.length() <= 0L) {
+            throw new IOException(message);
+        }
+    }
+
+    private static void appendSessionOutput(StringBuilder output, FFmpegSession session) {
+        if (output.length() > 0) {
+            output.append('\n');
+        }
+        output.append(session.getOutput());
+    }
+
     private static List<String> buildImageCommand(
             File audioFile,
             File imageFile,
@@ -660,6 +969,73 @@ public final class AvtohitProcessor {
         args.add("+faststart");
         args.add(outputFile.getAbsolutePath());
         return args;
+    }
+
+    private static List<String> buildImageSegmentCommand(
+            File imageFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            long durationMs
+    ) {
+        List<String> args = baseArgs();
+        args.add("-loop");
+        args.add("1");
+        args.add("-framerate");
+        args.add(String.valueOf(frameRate));
+        args.add("-t");
+        args.add(formatSeconds(durationMs));
+        args.add("-i");
+        args.add(imageFile.getAbsolutePath());
+        args.add("-vf");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-an");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildSilentVideoPairCommand(
+            File leftFile,
+            File rightFile,
+            File outputFile
+    ) {
+        List<String> args = baseArgs();
+        args.add("-i");
+        args.add(leftFile.getAbsolutePath());
+        args.add("-i");
+        args.add(rightFile.getAbsolutePath());
+        args.add("-filter_complex");
+        args.add("[0:v:0]setpts=PTS-STARTPTS[v0];[1:v:0]setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]");
+        args.add("-map");
+        args.add("[v]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-an");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildVideoPairCommand(
+            File leftFile,
+            File rightFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate
+    ) {
+        ArrayList<File> pair = new ArrayList<>();
+        pair.add(leftFile);
+        pair.add(rightFile);
+        return buildVideoSequenceCommand(pair, outputFile, exportProfile, frameRate);
     }
 
     private static List<String> buildVideoSequenceCommand(
@@ -1118,5 +1494,12 @@ public final class AvtohitProcessor {
         if (file != null && file.exists() && !file.delete()) {
             file.deleteOnExit();
         }
+    }
+
+    private static boolean sameFile(File left, File right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.getAbsolutePath().equals(right.getAbsolutePath());
     }
 }

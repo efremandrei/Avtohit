@@ -824,6 +824,7 @@ public final class MainActivity extends Activity {
                                 destinationUri,
                                 selectedProfile,
                                 selectedFrameRate,
+                                selectedVideoDurations,
                                 selectedVisualDurationMs,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
