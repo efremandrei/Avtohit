@@ -13,6 +13,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.MediaMetadataRetriever;
@@ -1242,9 +1243,59 @@ public final class MainActivity extends Activity {
                 R.string.about_us_body,
                 aboutVersionSummary(),
                 getString(R.string.about_email_plain),
-                getString(R.string.about_github_plain)
+                getString(R.string.about_github_plain),
+                debugLogLocation()
         );
-        showInfoDialog(R.string.about_us_title, body, true, 0);
+        showAboutInfoDialog(body);
+    }
+
+    private void showAboutInfoDialog(CharSequence body) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null);
+        TextView infoBody = dialogView.findViewById(R.id.infoBody);
+        infoBody.setText(body);
+        infoBody.setMovementMethod(LinkMovementMethod.getInstance());
+
+        TextView dialogTitle = buildDialogTitle(R.string.about_us_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setNeutralButton(R.string.about_read_logs, null)
+                .setPositiveButton(R.string.info_dialog_close, null)
+                .create();
+        dialog.setOnShowListener(unused -> {
+            styleInfoDialog(dialog, dialogTitle, dialogView);
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> showDebugLogDialog());
+        });
+        dialog.show();
+    }
+
+    private void showDebugLogDialog() {
+        String logText;
+        try {
+            AvtohitDebugLogger logger = debugLogger != null ? debugLogger : new AvtohitDebugLogger(this);
+            logText = logger.readLog();
+            if (logText == null || logText.trim().isEmpty()) {
+                logText = getString(R.string.debug_log_empty, logger.displayLocation());
+            }
+        } catch (IOException | RuntimeException error) {
+            logText = getString(R.string.debug_log_read_failed, safeMessage(error), debugLogLocation());
+        }
+
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null);
+        TextView infoBody = dialogView.findViewById(R.id.infoBody);
+        infoBody.setText(logText);
+        infoBody.setTextIsSelectable(true);
+        infoBody.setTextSize(12f);
+        infoBody.setTypeface(Typeface.MONOSPACE);
+
+        TextView dialogTitle = buildDialogTitle(R.string.debug_log_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setPositiveButton(R.string.info_dialog_close, null)
+                .create();
+        dialog.setOnShowListener(unused -> styleInfoDialog(dialog, dialogTitle, dialogView));
+        dialog.show();
     }
 
     private void showInfoDialog(int titleResId, CharSequence body, boolean enableLinks, int imageResId) {
@@ -1952,6 +2003,10 @@ public final class MainActivity extends Activity {
         int textColor = palette[2];
         styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.infoDialogContent), textColor, surfaceColor);
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        Button neutralButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+        if (neutralButton != null) {
+            neutralButton.setTextColor(textColor);
+        }
     }
 
     private int[] dialogPalette() {

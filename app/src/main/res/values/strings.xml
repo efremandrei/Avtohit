@@ -81,7 +81,11 @@
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
     <string name="about_email_plain">andrei.efr@gmail.com</string>
     <string name="about_github_plain">https://github.com/efremandrei/Avtohit</string>
-    <string name="about_us_body">Developer: Andrei Efremushkin\n\n%1$s\n\nEmail: %2$s\n\nGitHub: %3$s</string>
+    <string name="about_us_body">Developer: Andrei Efremushkin\n\n%1$s\n\nEmail: %2$s\n\nGitHub: %3$s\n\nDebug log: %4$s</string>
+    <string name="about_read_logs">Read Logs</string>
+    <string name="debug_log_title">Debug Log</string>
+    <string name="debug_log_empty">No debug log found yet.\nLocation: %1$s</string>
+    <string name="debug_log_read_failed">Could not read the debug log: %1$s\nLocation: %2$s</string>
     <string name="app_skin_light">Light</string>
     <string name="app_skin_dark">Dark</string>
     <string name="export_apply">Save Settings</string>

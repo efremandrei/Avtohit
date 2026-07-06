@@ -11,9 +11,12 @@ import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -24,6 +27,7 @@ public final class AvtohitDebugLogger {
     private static final String LOG_FILE_NAME = "AVTOHIT-debug-log.txt";
     private static final String LOG_DIR_NAME = "AVTOHIT";
     private static final String MIME_TYPE = "text/plain";
+    private static final int MAX_LOG_READ_BYTES = 128 * 1024;
 
     private final Context appContext;
     private volatile String lastKnownLocation;
@@ -76,6 +80,34 @@ public final class AvtohitDebugLogger {
             return "Downloads/" + LOG_DIR_NAME + "/" + LOG_FILE_NAME;
         }
         return new File(fallbackLogDirectory(), LOG_FILE_NAME).getAbsolutePath();
+    }
+
+    public synchronized String readLog() throws IOException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                Uri uri = findDownloadsLog();
+                if (uri != null) {
+                    try (InputStream input = appContext.getContentResolver().openInputStream(uri)) {
+                        if (input == null) {
+                            throw new IOException("Could not open debug log input stream.");
+                        }
+                        lastKnownLocation = "Downloads/" + LOG_DIR_NAME + "/" + LOG_FILE_NAME;
+                        return readUtf8Tail(input);
+                    }
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // Fall through to the app-private fallback file.
+            }
+        }
+
+        File file = new File(fallbackLogDirectory(), LOG_FILE_NAME);
+        if (!file.exists() || !file.isFile()) {
+            return "";
+        }
+        lastKnownLocation = file.getAbsolutePath();
+        try (InputStream input = new FileInputStream(file)) {
+            return readUtf8Tail(input);
+        }
     }
 
     private void write(String text) {
@@ -140,6 +172,24 @@ public final class AvtohitDebugLogger {
     }
 
     @TargetApi(Build.VERSION_CODES.Q)
+    private Uri findDownloadsLog() {
+        ContentResolver resolver = appContext.getContentResolver();
+        Uri collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        String relativePath = Environment.DIRECTORY_DOWNLOADS + "/" + LOG_DIR_NAME + "/";
+        String[] projection = new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.RELATIVE_PATH};
+        String selection = MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + "=?";
+        String[] args = new String[]{LOG_FILE_NAME, relativePath};
+
+        try (Cursor cursor = resolver.query(collection, projection, selection, args, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                return ContentUris.withAppendedId(collection, id);
+            }
+        }
+        return findExistingDownloadsLogByName(resolver, collection, relativePath);
+    }
+
+    @TargetApi(Build.VERSION_CODES.Q)
     private Uri findExistingDownloadsLogByName(ContentResolver resolver, Uri collection, String expectedRelativePath) {
         String[] projection = new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.RELATIVE_PATH};
         String selection = MediaStore.Downloads.DISPLAY_NAME + "=?";
@@ -183,6 +233,22 @@ public final class AvtohitDebugLogger {
 
     private static String timestamp() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
+    }
+
+    private static String readUtf8Tail(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        byte[] bytes = output.toByteArray();
+        if (bytes.length <= MAX_LOG_READ_BYTES) {
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
+        int start = bytes.length - MAX_LOG_READ_BYTES;
+        return "[Showing the last " + MAX_LOG_READ_BYTES + " bytes of a larger log]\n\n"
+                + new String(bytes, start, MAX_LOG_READ_BYTES, StandardCharsets.UTF_8);
     }
 
     private static String safe(String value) {
