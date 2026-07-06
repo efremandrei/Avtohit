@@ -1128,6 +1128,7 @@ public final class MainActivity extends Activity {
     private void showExportDialog(boolean startExportWhenSaved) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_export, null);
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
+        RadioGroup directionGroup = dialogView.findViewById(R.id.directionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         TextView imageTimeTitle = dialogView.findViewById(R.id.imageTimeTitle);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
@@ -1135,11 +1136,12 @@ public final class MainActivity extends Activity {
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
-        if (exportProfile == ExportProfile.P720) {
+        if (exportProfile.is720()) {
             resolutionGroup.check(R.id.resolution720);
         } else {
             resolutionGroup.check(R.id.resolution1080);
         }
+        directionGroup.check(exportProfile.horizontal ? R.id.directionHorizontal : R.id.directionVertical);
         fpsGroup.check(frameRate == 60 ? R.id.fps60 : R.id.fps30);
         int imageTimeVisibility = isImageVisualSelected() ? View.VISIBLE : View.GONE;
         imageTimeTitle.setVisibility(imageTimeVisibility);
@@ -1154,6 +1156,7 @@ public final class MainActivity extends Activity {
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
         resolutionGroup.setOnCheckedChangeListener(listener);
+        directionGroup.setOnCheckedChangeListener(listener);
         fpsGroup.setOnCheckedChangeListener(listener);
         imageTimeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -1335,18 +1338,15 @@ public final class MainActivity extends Activity {
 
     private void applyExportSelection(View dialogView) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
+        RadioGroup directionGroup = dialogView.findViewById(R.id.directionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
+        int directionId = directionGroup.getCheckedRadioButtonId();
         int fpsId = fpsGroup.getCheckedRadioButtonId();
 
-        if (resolutionId == R.id.resolution720) {
-            exportProfile = ExportProfile.P720;
-        } else {
-            exportProfile = ExportProfile.P1080;
-        }
-
+        exportProfile = ExportProfile.fromSelection(resolutionId == R.id.resolution720, directionId == R.id.directionHorizontal);
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
         slideSeconds = clampSlideSeconds(imageTimeSeek.getProgress());
         autoSplitTime = audioUri != null && autoSplitTimeCheck.isChecked();
@@ -1366,6 +1366,7 @@ public final class MainActivity extends Activity {
 
     private void updateExportSummary(View dialogView, TextView exportSummary) {
         RadioGroup resolutionGroup = dialogView.findViewById(R.id.resolutionGroup);
+        RadioGroup directionGroup = dialogView.findViewById(R.id.directionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
@@ -1378,16 +1379,20 @@ public final class MainActivity extends Activity {
             resolutionLabel = getString(R.string.export_resolution_1080);
         }
 
+        String directionLabel = directionGroup.getCheckedRadioButtonId() == R.id.directionHorizontal
+                ? getString(R.string.export_direction_horizontal)
+                : getString(R.string.export_direction_vertical);
         int selectedFrameRate = fpsGroup.getCheckedRadioButtonId() == R.id.fps60 ? 60 : 30;
         if (isImageVisualSelected()) {
             exportSummary.setText(getString(
                     R.string.export_summary_with_images,
                     resolutionLabel,
+                    directionLabel,
                     selectedFrameRate,
                     imageChangeSummary(clampSlideSeconds(imageTimeSeek.getProgress()), autoSplitTimeCheck.isChecked())
             ));
         } else {
-            exportSummary.setText(getString(R.string.export_summary, resolutionLabel, selectedFrameRate));
+            exportSummary.setText(getString(R.string.export_summary, resolutionLabel, directionLabel, selectedFrameRate));
         }
     }
 
@@ -1573,10 +1578,7 @@ public final class MainActivity extends Activity {
     }
 
     private static ExportProfile exportProfileFromLabel(String label) {
-        if (ExportProfile.P720.label.equals(label)) {
-            return ExportProfile.P720;
-        }
-        return ExportProfile.P1080;
+        return ExportProfile.fromLabel(label);
     }
 
     private boolean isSupportedMp3(String mimeType, String displayName, Uri uri) {

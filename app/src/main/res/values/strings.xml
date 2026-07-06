@@ -64,6 +64,9 @@
     <string name="export_dialog_title">Export Settings</string>
     <string name="settings_dialog_title">Settings</string>
     <string name="export_resolution_title">Resolution</string>
+    <string name="export_direction_title">Video direction</string>
+    <string name="export_direction_vertical">Vertical</string>
+    <string name="export_direction_horizontal">Horizontal</string>
     <string name="export_fps_title">Frame rate</string>
     <string name="image_time_title">Image time</string>
     <string name="image_time_first_only">0 sec - first image only</string>
@@ -72,7 +75,7 @@
     <string name="auto_split_time">Automatically split time</string>
     <string name="app_skin_title">Application skin</string>
     <string name="help_title">Help</string>
-    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio selects an MP3 soundtrack. It is optional for pictures-only silent videos and for joining multiple videos.\n\n3. Add Video/Image selects one picture, multiple pictures, one short video, or multiple videos. Numbered picture and video names are sorted in numeric order. Supported picture inputs include JPG, PNG, WEBP, HEIC, and HEIF.\n\n4. Merge To Video opens export settings, then asks where to save the final MP4.\n\n5. The status panel shows Visual, Audio, and Export readiness with selected file details, durations, and image timing. Tapping Visual opens Add Video/Image, tapping Audio opens Add Audio, and tapping Export opens Merge To Video.\n\n6. Export settings support 720p or 1080p, 30 fps or 60 fps, and Image time. With MP3 plus pictures, 0 sec keeps the first picture for the whole song. 1-60 sec rotates pictures in order and loops them until the MP3 ends. If Automatically split time is checked while Image time is 0, the MP3 length is divided equally across all selected pictures. For pictures without MP3, Image time must be 1-60 sec and the output is a silent video with length equal to picture count times image time. Multi-picture and multi-video exports are merged internally in sorted pairs until one final video remains.\n\n7. Preview shows the selected visual and MP3 playback when audio is selected.\n\n8. The merge progress bar appears above Preview while the final video is created. If merging gets stuck or fails, send Downloads/AVTOHIT/AVTOHIT-debug-log.txt. Every merge appends to the same log file. The app normalizes pictures before FFmpeg, but if a picture still cannot be decoded, re-save that picture as JPG or PNG and try again.</string>
+    <string name="help_body">1. The bottom buttons open Help, Application skin, and About Us.\n\n2. Add Audio selects an MP3 soundtrack. It is optional for pictures-only silent videos and for joining multiple videos.\n\n3. Add Video/Image selects one picture, multiple pictures, one short video, or multiple videos. Numbered picture and video names are sorted in numeric order. Supported picture inputs include JPG, PNG, WEBP, HEIC, and HEIF.\n\n4. Merge To Video opens export settings, then asks where to save the final MP4.\n\n5. The status panel shows Visual, Audio, and Export readiness with selected file details, durations, and image timing. Tapping Visual opens Add Video/Image, tapping Audio opens Add Audio, and tapping Export opens Merge To Video.\n\n6. Export settings support 720p or 1080p, Vertical or Horizontal video direction, 30 fps or 60 fps, and Image time. With MP3 plus pictures, 0 sec keeps the first picture for the whole song. 1-60 sec rotates pictures in order and loops them until the MP3 ends. If Automatically split time is checked while Image time is 0, the MP3 length is divided equally across all selected pictures. For pictures without MP3, Image time must be 1-60 sec and the output is a silent video with length equal to picture count times image time. Multi-picture and multi-video exports are merged internally in sorted pairs until one final video remains.\n\n7. Preview shows the selected visual and MP3 playback when audio is selected.\n\n8. The merge progress bar appears above Preview while the final video is created. If merging gets stuck or fails, send Downloads/AVTOHIT/AVTOHIT-debug-log.txt. Every merge appends to the same log file. The app normalizes pictures before FFmpeg, but if a picture still cannot be decoded, re-save that picture as JPG or PNG and try again.</string>
     <string name="help_image_description">Annotated AVTOHIT screen showing bottom actions, audio, visual, merge, status, export settings, progress above preview, preview, and debug log guidance</string>
     <string name="about_us_title">About Us</string>
     <string name="about_version_value">Version: %1$s (%2$d), %3$s build</string>
@@ -85,8 +88,8 @@
     <string name="export_start">Export</string>
     <string name="export_cancel">Cancel</string>
     <string name="info_dialog_close">Close</string>
-    <string name="export_summary">Current output: %1$s at %2$d fps</string>
-    <string name="export_summary_with_images">Current output: %1$s at %2$d fps. Image time: %3$s</string>
+    <string name="export_summary">Current output: %1$s %2$s at %3$d fps</string>
+    <string name="export_summary_with_images">Current output: %1$s %2$s at %3$d fps. Image time: %4$s</string>
     <string name="settings_summary">Current skin: %1$s. Output: %2$s at %3$d fps</string>
     <string name="skin_summary">Current skin: %1$s</string>
     <string name="skin_status_saved">Skin updated: %1$s</string>
