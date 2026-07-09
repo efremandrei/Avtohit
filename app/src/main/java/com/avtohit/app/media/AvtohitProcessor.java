@@ -417,6 +417,7 @@ public final class AvtohitProcessor {
             ExportProfile exportProfile,
             int frameRate,
             List<Long> videoDurationsMs,
+            List<? extends List<VideoSoundEffect>> videoSoundEffects,
             long targetDurationMs,
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
@@ -454,7 +455,19 @@ public final class AvtohitProcessor {
                 copyUriToFile(resolver, videoUri, videoFile);
                 log(debugLogger, "video_cache_bytes index=" + i + " bytes=" + videoFile.length());
                 videoFiles.add(videoFile);
-                videoClips.add(new TimedClip(videoFile, videoDurationAt(videoDurationsMs, i, targetDurationMs, videoUris.size()), i));
+                long clipDurationMs = videoDurationAt(videoDurationsMs, i, targetDurationMs, videoUris.size());
+                File editedVideoFile = new File(workDir, "video-sound-edited-" + runId + "-" + i + ".mp4");
+                File clipFile = applySoundEffectsToVideoIfNeeded(
+                        videoFile,
+                        editedVideoFile,
+                        clipDurationMs,
+                        soundEffectsAt(videoSoundEffects, i),
+                        debugLogger
+                );
+                if (!sameFile(videoFile, clipFile)) {
+                    videoFiles.add(clipFile);
+                }
+                videoClips.add(new TimedClip(clipFile, clipDurationMs, i));
             }
 
             String output = reduceTimedClipsPairwise(
@@ -499,6 +512,7 @@ public final class AvtohitProcessor {
             int frameRate,
             long videoDurationMs,
             int repeatCount,
+            List<VideoSoundEffect> soundEffects,
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
     ) throws IOException, AvtohitException {
@@ -532,10 +546,17 @@ public final class AvtohitProcessor {
                     + " export=" + exportProfile.label);
             copyUriToFile(resolver, videoUri, videoFile);
             log(debugLogger, "video_repeat_cache_bytes bytes=" + videoFile.length());
+            File repeatSourceFile = applySoundEffectsToVideoIfNeeded(
+                    videoFile,
+                    new File(workDir, "single-video-repeat-sound-edited-" + runId + ".mp4"),
+                    videoDurationMs,
+                    soundEffects,
+                    debugLogger
+            );
 
             FFmpegSession session = execute(
                     "repeat_video",
-                    buildRepeatedVideoCommand(videoFile, outputFile, exportProfile, frameRate, repeatCount),
+                    buildRepeatedVideoCommand(repeatSourceFile, outputFile, exportProfile, frameRate, repeatCount),
                     targetDurationMs,
                     progressListener,
                     debugLogger
@@ -550,6 +571,7 @@ public final class AvtohitProcessor {
             return new Result(VisualKind.VIDEO, true, false, outputFile.length(), output.toString());
         } finally {
             deleteIfExists(videoFile);
+            deleteIfExists(new File(workDir, "single-video-repeat-sound-edited-" + runId + ".mp4"));
             deleteIfExists(outputFile);
         }
     }
@@ -576,6 +598,79 @@ public final class AvtohitProcessor {
         } finally {
             cursor.close();
         }
+    }
+
+    private static File applySoundEffectsToVideoIfNeeded(
+            File videoFile,
+            File outputFile,
+            long durationMs,
+            List<VideoSoundEffect> soundEffects,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        List<VideoSoundEffect> safeEffects = safeSoundEffects(soundEffects, durationMs);
+        if (safeEffects.isEmpty()) {
+            return videoFile;
+        }
+
+        long safeDurationMs = Math.max(1L, durationMs);
+        log(debugLogger, "video_sound_effects_prepare source=" + videoFile.getName()
+                + " effectCount=" + safeEffects.size()
+                + " durationMs=" + safeDurationMs);
+
+        FFmpegSession session = execute(
+                "video_sound_effects",
+                buildVideoSoundEffectsCommand(videoFile, outputFile, safeDurationMs, safeEffects, true),
+                safeDurationMs,
+                null,
+                debugLogger
+        );
+        if (!ReturnCode.isSuccess(session.getReturnCode())) {
+            // Some imported clips have no audio stream. Retry against generated silence so the effect still renders.
+            log(debugLogger, "video_sound_effects_retry_silent_base source=" + videoFile.getName());
+            deleteIfExists(outputFile);
+            session = execute(
+                    "video_sound_effects_silent_base",
+                    buildVideoSoundEffectsCommand(videoFile, outputFile, safeDurationMs, safeEffects, false),
+                    safeDurationMs,
+                    null,
+                    debugLogger
+            );
+        }
+
+        ensureSuccessfulSession(session, "FFmpeg failed while applying video sound effects.");
+        ensureOutputFile(outputFile, "Edited video sound file was not created.");
+        log(debugLogger, "video_sound_effects_output bytes=" + outputFile.length());
+        return outputFile;
+    }
+
+    private static List<VideoSoundEffect> safeSoundEffects(List<VideoSoundEffect> soundEffects, long durationMs) {
+        ArrayList<VideoSoundEffect> safeEffects = new ArrayList<>();
+        if (soundEffects == null || soundEffects.isEmpty()) {
+            return safeEffects;
+        }
+
+        long safeDurationMs = Math.max(1L, durationMs);
+        for (VideoSoundEffect effect : soundEffects) {
+            if (effect == null) {
+                continue;
+            }
+            long startMs = Math.max(0L, effect.startMs);
+            if (startMs >= safeDurationMs) {
+                continue;
+            }
+            long maxDurationMs = Math.max(1L, safeDurationMs - startMs);
+            long effectDurationMs = Math.min(Math.max(1L, effect.durationMs), maxDurationMs);
+            safeEffects.add(new VideoSoundEffect(effect.type, startMs, effectDurationMs));
+        }
+        return safeEffects;
+    }
+
+    private static List<VideoSoundEffect> soundEffectsAt(List<? extends List<VideoSoundEffect>> values, int index) {
+        if (values == null || index < 0 || index >= values.size()) {
+            return Collections.emptyList();
+        }
+        List<VideoSoundEffect> effects = values.get(index);
+        return effects != null ? effects : Collections.emptyList();
     }
 
     private static FFmpegSession execute(
@@ -1179,6 +1274,76 @@ public final class AvtohitProcessor {
         args.add("0:v:0");
         args.add("-map");
         args.add("0:a?");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-c:a");
+        args.add("aac");
+        args.add("-b:a");
+        args.add("192k");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildVideoSoundEffectsCommand(
+            File videoFile,
+            File outputFile,
+            long durationMs,
+            List<VideoSoundEffect> soundEffects,
+            boolean useOriginalAudio
+    ) {
+        List<String> args = baseArgs();
+        args.add("-i");
+        args.add(videoFile.getAbsolutePath());
+        if (!useOriginalAudio) {
+            args.add("-f");
+            args.add("lavfi");
+            args.add("-t");
+            args.add(formatSeconds(durationMs));
+            args.add("-i");
+            args.add("anullsrc=channel_layout=stereo:sample_rate=44100");
+        }
+
+        StringBuilder filter = new StringBuilder();
+        int baseInputIndex = useOriginalAudio ? 0 : 1;
+        filter.append('[')
+                .append(baseInputIndex)
+                .append(":a:0]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=0:")
+                .append(formatSeconds(durationMs))
+                .append("[base];");
+        for (int i = 0; i < soundEffects.size(); i++) {
+            VideoSoundEffect effect = soundEffects.get(i);
+            filter.append("sine=frequency=1000:sample_rate=44100:duration=")
+                    .append(formatSeconds(effect.durationMs))
+                    .append(",volume=0.85,adelay=")
+                    .append(effect.startMs)
+                    .append('|')
+                    .append(effect.startMs)
+                    .append(",apad,atrim=0:")
+                    .append(formatSeconds(durationMs))
+                    .append("[fx")
+                    .append(i)
+                    .append("];");
+        }
+        filter.append("[base]");
+        for (int i = 0; i < soundEffects.size(); i++) {
+            filter.append("[fx").append(i).append(']');
+        }
+        filter.append("amix=inputs=")
+                .append(soundEffects.size() + 1)
+                .append(":duration=first:dropout_transition=0[a]");
+
+        args.add("-filter_complex");
+        args.add(filter.toString());
+        args.add("-map");
+        args.add("0:v:0");
+        args.add("-map");
+        args.add("[a]");
+        args.add("-t");
+        args.add(formatSeconds(durationMs));
         args.add("-c:v");
         args.add("mpeg4");
         args.add("-q:v");

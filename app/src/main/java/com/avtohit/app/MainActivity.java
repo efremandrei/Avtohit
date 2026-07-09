@@ -42,6 +42,7 @@ import android.widget.TextView;
 import com.avtohit.app.media.AvtohitException;
 import com.avtohit.app.media.AvtohitProcessor;
 import com.avtohit.app.media.ExportProfile;
+import com.avtohit.app.media.VideoSoundEffect;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -76,6 +77,7 @@ public final class MainActivity extends Activity {
     private static final String STATE_VISUAL_VIDEO_NAMES = "visual_video_names";
     private static final String STATE_VISUAL_VIDEO_EPOCHS = "visual_video_epochs";
     private static final String STATE_VISUAL_VIDEO_DURATIONS = "visual_video_durations";
+    private static final String STATE_VISUAL_VIDEO_SOUND_EFFECTS = "visual_video_sound_effects";
     private static final String STATE_EXPORT_PROFILE = "export_profile";
     private static final String STATE_FRAME_RATE = "frame_rate";
     private static final String STATE_SLIDE_SECONDS = "slide_seconds";
@@ -180,17 +182,23 @@ public final class MainActivity extends Activity {
         final boolean video;
         final long modifiedEpochMs;
         final long durationMs;
+        ArrayList<VideoSoundEffect> soundEffects;
 
         VisualOrderItem(Uri uri, String displayName, boolean video, long modifiedEpochMs, long durationMs) {
+            this(uri, displayName, video, modifiedEpochMs, durationMs, null);
+        }
+
+        VisualOrderItem(Uri uri, String displayName, boolean video, long modifiedEpochMs, long durationMs, List<VideoSoundEffect> soundEffects) {
             this.uri = uri;
             this.displayName = displayName;
             this.video = video;
             this.modifiedEpochMs = modifiedEpochMs;
             this.durationMs = durationMs;
+            this.soundEffects = copySoundEffects(soundEffects);
         }
 
         VisualOrderItem duplicate() {
-            return new VisualOrderItem(uri, displayName, video, modifiedEpochMs, durationMs);
+            return new VisualOrderItem(uri, displayName, video, modifiedEpochMs, durationMs, soundEffects);
         }
     }
 
@@ -290,6 +298,7 @@ public final class MainActivity extends Activity {
     private final ArrayList<String> visualVideoNames = new ArrayList<>();
     private final ArrayList<Long> visualVideoEpochs = new ArrayList<>();
     private final ArrayList<Long> visualVideoDurations = new ArrayList<>();
+    private final ArrayList<ArrayList<VideoSoundEffect>> visualVideoSoundEffects = new ArrayList<>();
     private boolean visualIsVideo;
     private boolean rendering;
     private boolean previewPlaying;
@@ -351,6 +360,7 @@ public final class MainActivity extends Activity {
         outState.putStringArrayList(STATE_VISUAL_VIDEO_NAMES, new ArrayList<>(visualVideoNames));
         outState.putLongArray(STATE_VISUAL_VIDEO_EPOCHS, longArrayFromList(visualVideoEpochs));
         outState.putLongArray(STATE_VISUAL_VIDEO_DURATIONS, longArrayFromList(visualVideoDurations));
+        outState.putStringArrayList(STATE_VISUAL_VIDEO_SOUND_EFFECTS, encodedSoundEffectLists(visualVideoSoundEffects));
         outState.putString(STATE_EXPORT_PROFILE, exportProfile.label);
         outState.putInt(STATE_FRAME_RATE, frameRate);
         outState.putInt(STATE_SLIDE_SECONDS, slideSeconds);
@@ -528,11 +538,13 @@ public final class MainActivity extends Activity {
         visualVideoNames.clear();
         visualVideoEpochs.clear();
         visualVideoDurations.clear();
+        visualVideoSoundEffects.clear();
 
         ArrayList<String> savedUriStrings = savedInstanceState.getStringArrayList(STATE_VISUAL_VIDEO_URIS);
         ArrayList<String> savedNames = savedInstanceState.getStringArrayList(STATE_VISUAL_VIDEO_NAMES);
         long[] savedEpochs = savedInstanceState.getLongArray(STATE_VISUAL_VIDEO_EPOCHS);
         long[] savedDurations = savedInstanceState.getLongArray(STATE_VISUAL_VIDEO_DURATIONS);
+        ArrayList<String> savedSoundEffects = savedInstanceState.getStringArrayList(STATE_VISUAL_VIDEO_SOUND_EFFECTS);
         if (savedUriStrings != null) {
             for (String rawUri : savedUriStrings) {
                 Uri parsedUri = parseUri(rawUri);
@@ -550,12 +562,14 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < visualVideoUris.size(); i++) {
             visualVideoEpochs.add(savedEpochs != null && i < savedEpochs.length ? savedEpochs[i] : 0L);
             visualVideoDurations.add(savedDurations != null && i < savedDurations.length ? savedDurations[i] : 0L);
+            visualVideoSoundEffects.add(decodeSoundEffects(savedSoundEffects != null && i < savedSoundEffects.size() ? savedSoundEffects.get(i) : null));
         }
         if (visualVideoUris.isEmpty() && visualUri != null && visualIsVideo) {
             visualVideoUris.add(visualUri);
             visualVideoNames.add(visualDisplayName != null ? visualDisplayName : getString(R.string.visual_track_default));
             visualVideoEpochs.add(readModifiedEpochMs(visualUri));
             visualVideoDurations.add(visualDurationMs);
+            visualVideoSoundEffects.add(new ArrayList<>());
         }
     }
 
@@ -688,6 +702,7 @@ public final class MainActivity extends Activity {
             visualVideoNames.add(selection.displayName);
             visualVideoEpochs.add(selection.modifiedEpochMs);
             visualVideoDurations.add(selection.durationMs);
+            visualVideoSoundEffects.add(new ArrayList<>());
             totalDurationMs += Math.max(0L, selection.durationMs);
         }
 
@@ -727,6 +742,7 @@ public final class MainActivity extends Activity {
             visualVideoNames.add(visualDisplayName);
             visualVideoEpochs.add(readModifiedEpochMs(uri));
             visualVideoDurations.add(visualDurationMs);
+            visualVideoSoundEffects.add(new ArrayList<>());
         }
         status.setText(R.string.ready);
     }
@@ -770,7 +786,8 @@ public final class MainActivity extends Activity {
                         visualDisplayName,
                         true,
                         readModifiedEpochMs(visualUri),
-                        visualDurationMs
+                        visualDurationMs,
+                        soundEffectsAt(visualVideoSoundEffects, 0)
                 ));
                 return items;
             }
@@ -780,7 +797,8 @@ public final class MainActivity extends Activity {
                         valueAt(visualVideoNames, i, getString(R.string.visual_track_default)),
                         true,
                         longAt(visualVideoEpochs, i, 0L),
-                        longAt(visualVideoDurations, i, 0L)
+                        longAt(visualVideoDurations, i, 0L),
+                        soundEffectsAt(visualVideoSoundEffects, i)
                 ));
             }
             return items;
@@ -823,11 +841,7 @@ public final class MainActivity extends Activity {
 
             orderBadge.setText(String.valueOf(i + 1));
             nameText.setText(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
-            metaText.setText(item.video
-                    ? item.durationMs > 0L
-                    ? getString(R.string.visual_order_video_meta, formatDuration(item.durationMs))
-                    : getString(R.string.visual_order_video_meta_unknown)
-                    : getString(R.string.visual_order_image_meta));
+            metaText.setText(visualOrderMetaText(item));
             dragHandle.setContentDescription(getString(R.string.visual_order_drag_item, i + 1));
             duplicateButton.setContentDescription(getString(R.string.visual_order_duplicate_item, i + 1));
             removeButton.setContentDescription(getString(R.string.visual_order_remove_item, i + 1));
@@ -842,6 +856,13 @@ public final class MainActivity extends Activity {
                 return started;
             });
             row.setOnDragListener((view, event) -> handleVisualOrderRowDrag(event, listContainer, items, item, row, commitOnChange));
+            row.setOnLongClickListener(view -> {
+                if (!item.video) {
+                    return false;
+                }
+                showVideoItemOptions(item, listContainer, items, commitOnChange);
+                return true;
+            });
             duplicateButton.setOnClickListener(view -> {
                 int index = items.indexOf(item);
                 items.add(index >= 0 ? index + 1 : items.size(), item.duplicate());
@@ -904,6 +925,102 @@ public final class MainActivity extends Activity {
         renderVisualOrderRows(listContainer, items, false);
     }
 
+    private String visualOrderMetaText(VisualOrderItem item) {
+        if (!item.video) {
+            return getString(R.string.visual_order_image_meta);
+        }
+        int effectCount = item.soundEffects != null ? item.soundEffects.size() : 0;
+        if (item.durationMs > 0L) {
+            return effectCount > 0
+                    ? getString(R.string.visual_order_video_meta_with_effects, formatDuration(item.durationMs), effectCount)
+                    : getString(R.string.visual_order_video_meta, formatDuration(item.durationMs));
+        }
+        return effectCount > 0
+                ? getString(R.string.visual_order_video_meta_unknown_with_effects, effectCount)
+                : getString(R.string.visual_order_video_meta_unknown);
+    }
+
+    private void showVideoItemOptions(
+            VisualOrderItem item,
+            LinearLayout listContainer,
+            ArrayList<VisualOrderItem> items,
+            boolean commitOnChange
+    ) {
+        LinearLayout content = new LinearLayout(this);
+        content.setId(View.generateViewId());
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(18), dp(12), dp(18), dp(12));
+
+        Button editSoundButton = new Button(this);
+        editSoundButton.setAllCaps(false);
+        editSoundButton.setText(R.string.edit_video_sound);
+        editSoundButton.setTextSize(16f);
+        editSoundButton.setMinHeight(dp(52));
+        content.addView(editSoundButton, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        TextView dialogTitle = buildDialogTitle(R.string.video_options_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(content)
+                .setNegativeButton(R.string.export_cancel, null)
+                .create();
+        dialog.setOnShowListener(unused -> {
+            int[] palette = dialogPalette();
+            styleDialogShell(dialog, dialogTitle, content, palette[2], palette[0]);
+            styleBottomActionButton(editSoundButton);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+        });
+        editSoundButton.setOnClickListener(view -> {
+            dialog.dismiss();
+            showVideoSoundEditor(item, listContainer, items, commitOnChange);
+        });
+        dialog.show();
+    }
+
+    private void showVideoSoundEditor(
+            VisualOrderItem item,
+            LinearLayout listContainer,
+            ArrayList<VisualOrderItem> items,
+            boolean commitOnChange
+    ) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_video_sound_editor, null);
+        TextView fileName = dialogView.findViewById(R.id.videoSoundEditorFile);
+        TextView summary = dialogView.findViewById(R.id.videoSoundEditorSummary);
+        SoundTimelineView timeline = dialogView.findViewById(R.id.soundTimeline);
+        Button addCensorBeep = dialogView.findViewById(R.id.addCensorBeepButton);
+        Button deleteEffect = dialogView.findViewById(R.id.deleteSoundEffectButton);
+
+        long editorDurationMs = item.durationMs > 0L ? item.durationMs : 60_000L;
+        fileName.setText(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
+        timeline.setDurationMs(editorDurationMs);
+        timeline.setEffects(item.soundEffects);
+        updateVideoSoundEditorSummary(summary, timeline, editorDurationMs);
+        timeline.setOnEffectsChangedListener(() -> updateVideoSoundEditorSummary(summary, timeline, editorDurationMs));
+        addCensorBeep.setOnClickListener(view -> timeline.addCensorBeep());
+        deleteEffect.setOnClickListener(view -> timeline.deleteSelected());
+
+        TextView dialogTitle = buildDialogTitle(R.string.video_sound_editor_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setNegativeButton(R.string.export_cancel, null)
+                .setPositiveButton(R.string.export_apply, (dialogInterface, which) -> {
+                    item.soundEffects = timeline.effectsCopy();
+                    handleVisualOrderListChanged(listContainer, items, commitOnChange);
+                    status.setText(R.string.sound_effects_saved);
+                })
+                .create();
+        dialog.setOnShowListener(unused -> styleVideoSoundEditorDialog(dialog, dialogTitle, dialogView, timeline));
+        dialog.show();
+    }
+
+    private void updateVideoSoundEditorSummary(TextView summary, SoundTimelineView timeline, long durationMs) {
+        summary.setText(getString(R.string.video_sound_editor_summary, formatDuration(durationMs), timeline.effectsCopy().size()));
+    }
+
     private void moveVisualOrderItemToIndex(ArrayList<VisualOrderItem> items, VisualOrderItem draggedItem, int targetIndex) {
         int from = items.indexOf(draggedItem);
         if (from < 0) {
@@ -944,6 +1061,7 @@ public final class MainActivity extends Activity {
                 visualVideoNames.add(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
                 visualVideoEpochs.add(item.modifiedEpochMs);
                 visualVideoDurations.add(item.durationMs);
+                visualVideoSoundEffects.add(copySoundEffects(item.soundEffects));
                 totalDurationMs += Math.max(0L, item.durationMs);
             }
             VisualOrderItem firstItem = items.get(0);
@@ -990,6 +1108,7 @@ public final class MainActivity extends Activity {
         visualVideoNames.clear();
         visualVideoEpochs.clear();
         visualVideoDurations.clear();
+        visualVideoSoundEffects.clear();
     }
 
     private void launchPicker(Intent intent, int requestCode, int errorResId) {
@@ -1068,6 +1187,7 @@ public final class MainActivity extends Activity {
         ArrayList<String> selectedVideoNames = new ArrayList<>(visualVideoNames);
         ArrayList<Long> selectedVideoEpochs = new ArrayList<>(visualVideoEpochs);
         ArrayList<Long> selectedVideoDurations = new ArrayList<>(visualVideoDurations);
+        ArrayList<ArrayList<VideoSoundEffect>> selectedVideoSoundEffects = copySoundEffectLists(visualVideoSoundEffects);
         AvtohitDebugLogger selectedLogger = debugLogger != null ? debugLogger : new AvtohitDebugLogger(this);
 
         try {
@@ -1088,6 +1208,7 @@ public final class MainActivity extends Activity {
                             selectedVideoNames,
                             selectedVideoEpochs,
                             selectedVideoDurations,
+                            selectedVideoSoundEffects,
                             destinationUri,
                             selectedProfile,
                             selectedFrameRate,
@@ -1118,6 +1239,7 @@ public final class MainActivity extends Activity {
                                 selectedFrameRate,
                                 selectedVisualDurationMs,
                                 selectedVideoRepeatCount,
+                                selectedVideoSoundEffects.isEmpty() ? null : selectedVideoSoundEffects.get(0),
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
                         );
@@ -1129,6 +1251,7 @@ public final class MainActivity extends Activity {
                                 selectedProfile,
                                 selectedFrameRate,
                                 selectedVideoDurations,
+                                selectedVideoSoundEffects,
                                 selectedVisualDurationMs,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
@@ -1192,6 +1315,7 @@ public final class MainActivity extends Activity {
             List<String> selectedVideoNames,
             List<Long> selectedVideoEpochs,
             List<Long> selectedVideoDurations,
+            List<ArrayList<VideoSoundEffect>> selectedVideoSoundEffects,
             Uri destinationUri,
             ExportProfile selectedProfile,
             int selectedFrameRate,
@@ -1222,9 +1346,13 @@ public final class MainActivity extends Activity {
             String videoName = i < selectedVideoNames.size() ? selectedVideoNames.get(i) : "";
             long epochMs = i < selectedVideoEpochs.size() ? selectedVideoEpochs.get(i) : 0L;
             long durationMs = i < selectedVideoDurations.size() ? selectedVideoDurations.get(i) : 0L;
+            int soundEffectCount = i < selectedVideoSoundEffects.size() && selectedVideoSoundEffects.get(i) != null
+                    ? selectedVideoSoundEffects.get(i).size()
+                    : 0;
             logger.append("video_order[" + i + "] name=" + safeLogValue(videoName)
                     + " modifiedEpochMs=" + epochMs
                     + " durationMs=" + durationMs
+                    + " soundEffectCount=" + soundEffectCount
                     + " uri=" + uriSummary(selectedVideoUris.get(i)));
         }
         logger.append("destination_uri=" + uriSummary(destinationUri));
@@ -2238,6 +2366,75 @@ public final class MainActivity extends Activity {
         return output;
     }
 
+    private static ArrayList<String> encodedSoundEffectLists(List<ArrayList<VideoSoundEffect>> effectLists) {
+        ArrayList<String> encoded = new ArrayList<>();
+        if (effectLists == null) {
+            return encoded;
+        }
+        for (List<VideoSoundEffect> effects : effectLists) {
+            StringBuilder builder = new StringBuilder();
+            if (effects != null) {
+                for (VideoSoundEffect effect : effects) {
+                    if (effect == null) {
+                        continue;
+                    }
+                    if (builder.length() > 0) {
+                        builder.append(';');
+                    }
+                    builder.append(effect.encode());
+                }
+            }
+            encoded.add(builder.toString());
+        }
+        return encoded;
+    }
+
+    private static ArrayList<VideoSoundEffect> decodeSoundEffects(String raw) {
+        ArrayList<VideoSoundEffect> effects = new ArrayList<>();
+        if (raw == null || raw.trim().isEmpty()) {
+            return effects;
+        }
+        String[] parts = raw.split(";");
+        for (String part : parts) {
+            VideoSoundEffect effect = VideoSoundEffect.decode(part);
+            if (effect != null) {
+                effects.add(effect);
+            }
+        }
+        return effects;
+    }
+
+    private static ArrayList<VideoSoundEffect> copySoundEffects(List<VideoSoundEffect> source) {
+        ArrayList<VideoSoundEffect> copy = new ArrayList<>();
+        if (source == null) {
+            return copy;
+        }
+        for (VideoSoundEffect effect : source) {
+            if (effect != null) {
+                copy.add(effect.copy());
+            }
+        }
+        return copy;
+    }
+
+    private static ArrayList<ArrayList<VideoSoundEffect>> copySoundEffectLists(List<ArrayList<VideoSoundEffect>> source) {
+        ArrayList<ArrayList<VideoSoundEffect>> copy = new ArrayList<>();
+        if (source == null) {
+            return copy;
+        }
+        for (List<VideoSoundEffect> effects : source) {
+            copy.add(copySoundEffects(effects));
+        }
+        return copy;
+    }
+
+    private static ArrayList<VideoSoundEffect> soundEffectsAt(List<ArrayList<VideoSoundEffect>> values, int index) {
+        if (values == null || index < 0 || index >= values.size()) {
+            return new ArrayList<>();
+        }
+        return copySoundEffects(values.get(index));
+    }
+
     private static String valueAt(List<String> values, int index, String fallback) {
         if (values == null || index < 0 || index >= values.size()) {
             return fallback;
@@ -2514,6 +2711,18 @@ public final class MainActivity extends Activity {
         }
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void styleVideoSoundEditorDialog(AlertDialog dialog, TextView dialogTitle, View dialogView, SoundTimelineView timeline) {
+        int[] palette = dialogPalette();
+        int surfaceColor = palette[0];
+        int summaryColor = palette[1];
+        int textColor = palette[2];
+        int borderColor = palette[3];
+        styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.videoSoundEditorContent), textColor, surfaceColor);
+        timeline.setPalette(surfaceColor, summaryColor, borderColor, textColor, currentSkin.mutedColor, neededColor());
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
     }
 
