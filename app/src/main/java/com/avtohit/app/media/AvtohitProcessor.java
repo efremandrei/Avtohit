@@ -491,6 +491,69 @@ public final class AvtohitProcessor {
         }
     }
 
+    public Result renderVideoRepeated(
+            Context context,
+            Uri videoUri,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long videoDurationMs,
+            int repeatCount,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
+        if (videoUri == null) {
+            throw new AvtohitException("Select a video to repeat.");
+        }
+        if (destinationUri == null) {
+            throw new AvtohitException("Output target must be selected.");
+        }
+        if (repeatCount < 1) {
+            throw new AvtohitException("Video repeat count must be at least 1.");
+        }
+
+        ContentResolver resolver = context.getContentResolver();
+        File workDir = new File(context.getCacheDir(), "avtohit");
+        if (!workDir.exists() && !workDir.mkdirs()) {
+            throw new IOException("Could not create AVTOHIT cache directory.");
+        }
+
+        pruneStaleWorkFiles(workDir);
+        long runId = System.currentTimeMillis();
+        File videoFile = new File(workDir, "single-video-repeat-" + runId + "." + visualExtension(resolver, videoUri, resolver.getType(videoUri)));
+        File outputFile = new File(workDir, "output-video-repeat-" + runId + ".mp4");
+        long targetDurationMs = Math.max(1L, videoDurationMs > 0L ? videoDurationMs * (long) repeatCount : 1L);
+
+        try {
+            log(debugLogger, "video_repeat_input repeatCount=" + repeatCount
+                    + " sourceDurationMs=" + videoDurationMs
+                    + " targetDurationMs=" + targetDurationMs
+                    + " frameRate=" + frameRate
+                    + " export=" + exportProfile.label);
+            copyUriToFile(resolver, videoUri, videoFile);
+            log(debugLogger, "video_repeat_cache_bytes bytes=" + videoFile.length());
+
+            FFmpegSession session = execute(
+                    "repeat_video",
+                    buildRepeatedVideoCommand(videoFile, outputFile, exportProfile, frameRate, repeatCount),
+                    targetDurationMs,
+                    progressListener,
+                    debugLogger
+            );
+            ensureSuccessfulSession(session, "FFmpeg failed while repeating the selected video.");
+            ensureOutputFile(outputFile, "Repeated video file was not created.");
+            StringBuilder output = new StringBuilder();
+            appendSessionOutput(output, session);
+
+            copyFileToUri(resolver, outputFile, destinationUri);
+            log(debugLogger, "copied_output_to_destination bytes=" + outputFile.length());
+            return new Result(VisualKind.VIDEO, true, false, outputFile.length(), output.toString());
+        } finally {
+            deleteIfExists(videoFile);
+            deleteIfExists(outputFile);
+        }
+    }
+
     public static String displayName(Context context, Uri uri) {
         Cursor cursor;
         try {
@@ -1080,6 +1143,42 @@ public final class AvtohitProcessor {
         args.add("[v]");
         args.add("-map");
         args.add("[a]");
+        args.add("-c:v");
+        args.add("mpeg4");
+        args.add("-q:v");
+        args.add("3");
+        args.add("-c:a");
+        args.add("aac");
+        args.add("-b:a");
+        args.add("192k");
+        args.add("-movflags");
+        args.add("+faststart");
+        args.add(outputFile.getAbsolutePath());
+        return args;
+    }
+
+    private static List<String> buildRepeatedVideoCommand(
+            File videoFile,
+            File outputFile,
+            ExportProfile exportProfile,
+            int frameRate,
+            int repeatCount
+    ) {
+        List<String> args = baseArgs();
+        args.add("-fflags");
+        args.add("+genpts");
+        if (repeatCount > 1) {
+            args.add("-stream_loop");
+            args.add(String.valueOf(repeatCount - 1));
+        }
+        args.add("-i");
+        args.add(videoFile.getAbsolutePath());
+        args.add("-vf");
+        args.add(buildScalePadFilter(exportProfile, frameRate));
+        args.add("-map");
+        args.add("0:v:0");
+        args.add("-map");
+        args.add("0:a?");
         args.add("-c:v");
         args.add("mpeg4");
         args.add("-q:v");

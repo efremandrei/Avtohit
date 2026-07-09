@@ -79,7 +79,9 @@ public final class MainActivity extends Activity {
     private static final String STATE_FRAME_RATE = "frame_rate";
     private static final String STATE_SLIDE_SECONDS = "slide_seconds";
     private static final String STATE_AUTO_SPLIT_TIME = "auto_split_time";
+    private static final String STATE_VIDEO_REPEAT_COUNT = "video_repeat_count";
     private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
+    private static final int MAX_VIDEO_REPEAT_COUNT = 60;
     private static final int POSITIVE_READY_LIGHT = 0xFF12664F;
     private static final int POSITIVE_READY_DARK = 0xFF74D7B5;
     private static final int NEGATIVE_NEEDED_LIGHT = 0xFFA63C36;
@@ -271,6 +273,7 @@ public final class MainActivity extends Activity {
     private ExportProfile exportProfile = ExportProfile.P1080;
     private int frameRate = 30;
     private int slideSeconds;
+    private int videoRepeatCount = 1;
     private boolean autoSplitTime;
     private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
@@ -327,6 +330,7 @@ public final class MainActivity extends Activity {
         outState.putInt(STATE_FRAME_RATE, frameRate);
         outState.putInt(STATE_SLIDE_SECONDS, slideSeconds);
         outState.putBoolean(STATE_AUTO_SPLIT_TIME, autoSplitTime);
+        outState.putInt(STATE_VIDEO_REPEAT_COUNT, videoRepeatCount);
     }
 
     @Override
@@ -456,6 +460,7 @@ public final class MainActivity extends Activity {
         frameRate = savedInstanceState.getInt(STATE_FRAME_RATE, frameRate);
         slideSeconds = clampSlideSeconds(savedInstanceState.getInt(STATE_SLIDE_SECONDS, 0));
         autoSplitTime = savedInstanceState.getBoolean(STATE_AUTO_SPLIT_TIME, false);
+        videoRepeatCount = clampVideoRepeatCount(savedInstanceState.getInt(STATE_VIDEO_REPEAT_COUNT, 1));
     }
 
     private void restoreVisualImageState(Bundle savedInstanceState) {
@@ -781,6 +786,7 @@ public final class MainActivity extends Activity {
         long selectedVisualDurationMs = visualDurationMs;
         int selectedSlideSeconds = slideSeconds;
         boolean selectedAutoSplitTime = autoSplitTime;
+        int selectedVideoRepeatCount = videoRepeatCount;
         String selectedAudioName = audioDisplayName;
         String selectedVisualName = visualDisplayName;
         ArrayList<String> selectedImageNames = new ArrayList<>(visualImageNames);
@@ -813,7 +819,8 @@ public final class MainActivity extends Activity {
                             selectedAudioDurationMs,
                             selectedVisualDurationMs,
                             selectedSlideSeconds,
-                            selectedAutoSplitTime
+                            selectedAutoSplitTime,
+                            selectedVideoRepeatCount
                     );
                     AvtohitProcessor.Result result;
                     if (selectedAudio == null && !selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
@@ -824,6 +831,18 @@ public final class MainActivity extends Activity {
                                 selectedProfile,
                                 selectedFrameRate,
                                 selectedSlideSeconds,
+                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
+                                selectedLogger
+                        );
+                    } else if (selectedAudio == null && selectedVisualIsVideo && selectedVideoUris.size() == 1) {
+                        result = processor.renderVideoRepeated(
+                                getApplicationContext(),
+                                selectedVideoUris.get(0),
+                                destinationUri,
+                                selectedProfile,
+                                selectedFrameRate,
+                                selectedVisualDurationMs,
+                                selectedVideoRepeatCount,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
                         );
@@ -904,7 +923,8 @@ public final class MainActivity extends Activity {
             long selectedAudioDurationMs,
             long selectedVisualDurationMs,
             int selectedSlideSeconds,
-            boolean selectedAutoSplitTime
+            boolean selectedAutoSplitTime,
+            int selectedVideoRepeatCount
     ) {
         logger.append("audio_name=" + safeLogValue(selectedAudioName));
         logger.append("audio_uri=" + uriSummary(selectedAudio));
@@ -917,6 +937,7 @@ public final class MainActivity extends Activity {
         logger.append("image_count=" + selectedImageUris.size());
         logger.append("slide_seconds=" + selectedSlideSeconds);
         logger.append("auto_split_time=" + selectedAutoSplitTime);
+        logger.append("video_repeat_count=" + selectedVideoRepeatCount);
         for (int i = 0; i < selectedImageUris.size(); i++) {
             String imageName = i < selectedImageNames.size() ? selectedImageNames.get(i) : "";
             logger.append("image_order[" + i + "] name=" + safeLogValue(imageName) + " uri=" + uriSummary(selectedImageUris.get(i)));
@@ -948,7 +969,7 @@ public final class MainActivity extends Activity {
             mode = getString(R.string.mode_video);
         }
         String audioMode = !result.usesImportedMp3
-                ? (result.visualKind == AvtohitProcessor.VisualKind.VIDEO_SEQUENCE
+                ? (result.visualKind == AvtohitProcessor.VisualKind.VIDEO || result.visualKind == AvtohitProcessor.VisualKind.VIDEO_SEQUENCE
                 ? getString(R.string.video_audio_merged)
                 : getString(R.string.no_audio))
                 : result.videoReencoded
@@ -976,7 +997,7 @@ public final class MainActivity extends Activity {
         String visualSummary = visualSummaryText();
         String audioSummary = audioDisplayName != null
                 ? audioDisplayName
-                : (isVideoSequenceSelected() || isImageVisualSelected()) ? getString(R.string.mp3_not_needed) : getString(R.string.mp3_not_selected);
+                : (isVideoSequenceSelected() || isImageVisualSelected() || isSingleVideoRepeatSelected()) ? getString(R.string.mp3_not_needed) : getString(R.string.mp3_not_selected);
         String exportSummary = exportProfile.label + " - " + frameRate + "fps";
 
         visualChip.setText(ellipsize(visualSummary, 40));
@@ -984,6 +1005,8 @@ public final class MainActivity extends Activity {
         audioChip.setText(ellipsize(audioSummary, 40));
         audioDurationLine.setText(isVideoSequenceSelected()
                 ? getString(R.string.video_sequence_audio_line)
+                : isSingleVideoRepeatSelected()
+                ? getString(R.string.export_video_repeat_line, videoRepeatSummary())
                 : isPicturesOnlySelected()
                 ? getString(R.string.pictures_only_audio_line)
                 : audioDurationMs > 0L
@@ -992,6 +1015,8 @@ public final class MainActivity extends Activity {
         exportChip.setText(exportSummary);
         exportOutputLine.setText(isVideoSequenceSelected()
                 ? getString(R.string.export_video_sequence_line)
+                : isSingleVideoRepeatSelected()
+                ? getString(R.string.export_video_repeat_line, videoRepeatSummary())
                 : isImageVisualSelected()
                 ? getString(R.string.export_image_time_line, imageChangeSummary())
                 : getString(R.string.export_output_line));
@@ -1023,6 +1048,14 @@ public final class MainActivity extends Activity {
         return visualIsVideo && visualVideoUris.size() > 1;
     }
 
+    private boolean isSingleVideoSelected() {
+        return visualUri != null && visualIsVideo && visualVideoUris.size() == 1;
+    }
+
+    private boolean isSingleVideoRepeatSelected() {
+        return audioUri == null && isSingleVideoSelected();
+    }
+
     private boolean isPicturesOnlySelected() {
         return audioUri == null && isImageVisualSelected();
     }
@@ -1032,7 +1065,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean canStartMerge() {
-        return visualUri != null && (audioUri != null || isVideoSequenceSelected() || isPicturesOnlyReady());
+        return visualUri != null && (audioUri != null || isSingleVideoRepeatSelected() || isVideoSequenceSelected() || isPicturesOnlyReady());
     }
 
     private String visualDetailLine() {
@@ -1046,6 +1079,9 @@ public final class MainActivity extends Activity {
             return visualDurationMs > 0L
                     ? getString(R.string.visual_video_sequence_detail, formatDuration(visualDurationMs))
                     : getString(R.string.visual_video_sequence_no_duration);
+        }
+        if (isSingleVideoRepeatSelected() && visualDurationMs > 0L) {
+            return getString(R.string.visual_video_repeat_detail, formatDuration(visualDurationMs), videoRepeatSummary());
         }
         if (visualIsVideo && visualDurationMs > 0L) {
             return getString(R.string.duration_value, formatDuration(visualDurationMs));
@@ -1067,9 +1103,25 @@ public final class MainActivity extends Activity {
         return getString(R.string.image_time_seconds, seconds);
     }
 
+    private String videoRepeatSummary() {
+        return videoRepeatSummary(videoRepeatCount);
+    }
+
+    private String videoRepeatSummary(int repeatCount) {
+        int repeats = clampVideoRepeatCount(repeatCount);
+        return repeats == 1 ? getString(R.string.video_repeat_once) : getString(R.string.video_repeat_times, repeats);
+    }
+
+    private long repeatedVideoDurationMs() {
+        if (visualDurationMs <= 0L) {
+            return 0L;
+        }
+        return visualDurationMs * (long) clampVideoRepeatCount(videoRepeatCount);
+    }
+
     private void styleReadinessLabels() {
         styleReadinessLabel(visualReadiness, visualUri != null);
-        styleReadinessLabel(audioReadiness, audioUri != null || isVideoSequenceSelected() || isImageVisualSelected());
+        styleReadinessLabel(audioReadiness, audioUri != null || isVideoSequenceSelected() || isSingleVideoRepeatSelected() || isImageVisualSelected());
         styleReadinessLabel(exportReadiness, canStartMerge());
     }
 
@@ -1097,7 +1149,9 @@ public final class MainActivity extends Activity {
             previewModeLabel.setText(!visualIsVideo && visualImageUris.size() > 1 ? R.string.mode_slideshow : (isVideoSequenceSelected() ? R.string.mode_video_sequence : (visualIsVideo ? R.string.mode_video : R.string.mode_picture)));
         }
 
-        long previewDurationMs = audioDurationMs > 0L ? audioDurationMs : (isVideoSequenceSelected() ? visualDurationMs : 0L);
+        long previewDurationMs = audioDurationMs > 0L
+                ? audioDurationMs
+                : (isVideoSequenceSelected() ? visualDurationMs : isSingleVideoRepeatSelected() ? repeatedVideoDurationMs() : 0L);
         int totalMs = (int) Math.min(Integer.MAX_VALUE, previewDurationMs);
         previewSeek.setMax(Math.max(totalMs, 1));
         if (!previewPlaying) {
@@ -1135,6 +1189,9 @@ public final class MainActivity extends Activity {
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
         TextView imageTimeValue = dialogView.findViewById(R.id.imageTimeValue);
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
+        TextView videoRepeatTitle = dialogView.findViewById(R.id.videoRepeatTitle);
+        TextView videoRepeatValue = dialogView.findViewById(R.id.videoRepeatValue);
+        SeekBar videoRepeatSeek = dialogView.findViewById(R.id.videoRepeatSeek);
         TextView exportSummary = dialogView.findViewById(R.id.exportSummary);
 
         if (exportProfile.is720()) {
@@ -1152,7 +1209,13 @@ public final class MainActivity extends Activity {
         imageTimeSeek.setProgress(slideSeconds);
         autoSplitTimeCheck.setEnabled(audioUri != null);
         autoSplitTimeCheck.setChecked(audioUri != null && autoSplitTime);
+        int videoRepeatVisibility = isSingleVideoRepeatSelected() ? View.VISIBLE : View.GONE;
+        videoRepeatTitle.setVisibility(videoRepeatVisibility);
+        videoRepeatValue.setVisibility(videoRepeatVisibility);
+        videoRepeatSeek.setVisibility(videoRepeatVisibility);
+        videoRepeatSeek.setProgress(clampVideoRepeatCount(videoRepeatCount) - 1);
         updateImageTimeValue(imageTimeSeek, imageTimeValue, autoSplitTimeCheck);
+        updateVideoRepeatValue(videoRepeatSeek, videoRepeatValue);
         updateExportSummary(dialogView, exportSummary);
 
         RadioGroup.OnCheckedChangeListener listener = (group, checkedId) -> updateExportSummary(dialogView, exportSummary);
@@ -1179,6 +1242,23 @@ public final class MainActivity extends Activity {
         autoSplitTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
             updateImageTimeValue(imageTimeSeek, imageTimeValue, autoSplitTimeCheck);
             updateExportSummary(dialogView, exportSummary);
+        });
+        videoRepeatSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateVideoRepeatValue(seekBar, videoRepeatValue);
+                updateExportSummary(dialogView, exportSummary);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // No-op.
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // No-op.
+            }
         });
 
         TextView dialogTitle = buildDialogTitle(startExportWhenSaved ? R.string.export_dialog_title : R.string.settings_dialog_title);
@@ -1392,6 +1472,7 @@ public final class MainActivity extends Activity {
         RadioGroup directionGroup = dialogView.findViewById(R.id.directionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
+        SeekBar videoRepeatSeek = dialogView.findViewById(R.id.videoRepeatSeek);
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
         int resolutionId = resolutionGroup.getCheckedRadioButtonId();
         int directionId = directionGroup.getCheckedRadioButtonId();
@@ -1401,6 +1482,7 @@ public final class MainActivity extends Activity {
         frameRate = fpsId == R.id.fps60 ? 60 : 30;
         slideSeconds = clampSlideSeconds(imageTimeSeek.getProgress());
         autoSplitTime = audioUri != null && autoSplitTimeCheck.isChecked();
+        videoRepeatCount = clampVideoRepeatCount(videoRepeatSeek.getProgress() + 1);
     }
 
     private void applySkinSelection(View dialogView) {
@@ -1420,6 +1502,7 @@ public final class MainActivity extends Activity {
         RadioGroup directionGroup = dialogView.findViewById(R.id.directionGroup);
         RadioGroup fpsGroup = dialogView.findViewById(R.id.fpsGroup);
         SeekBar imageTimeSeek = dialogView.findViewById(R.id.imageTimeSeek);
+        SeekBar videoRepeatSeek = dialogView.findViewById(R.id.videoRepeatSeek);
         CheckBox autoSplitTimeCheck = dialogView.findViewById(R.id.autoSplitTimeCheck);
 
         String resolutionLabel;
@@ -1442,6 +1525,14 @@ public final class MainActivity extends Activity {
                     selectedFrameRate,
                     imageChangeSummary(clampSlideSeconds(imageTimeSeek.getProgress()), autoSplitTimeCheck.isChecked())
             ));
+        } else if (isSingleVideoRepeatSelected()) {
+            exportSummary.setText(getString(
+                    R.string.export_summary_with_video_repeats,
+                    resolutionLabel,
+                    directionLabel,
+                    selectedFrameRate,
+                    videoRepeatSummary(clampVideoRepeatCount(videoRepeatSeek.getProgress() + 1))
+            ));
         } else {
             exportSummary.setText(getString(R.string.export_summary, resolutionLabel, directionLabel, selectedFrameRate));
         }
@@ -1449,6 +1540,10 @@ public final class MainActivity extends Activity {
 
     private void updateImageTimeValue(SeekBar seekBar, TextView imageTimeValue, CheckBox autoSplitTimeCheck) {
         imageTimeValue.setText(imageChangeSummary(clampSlideSeconds(seekBar.getProgress()), autoSplitTimeCheck.isChecked()));
+    }
+
+    private void updateVideoRepeatValue(SeekBar seekBar, TextView videoRepeatValue) {
+        videoRepeatValue.setText(videoRepeatSummary(clampVideoRepeatCount(seekBar.getProgress() + 1)));
     }
 
     private void updateSkinSummary(RadioGroup skinGroup, TextView skinSummary) {
@@ -1712,6 +1807,10 @@ public final class MainActivity extends Activity {
         return Math.max(0, Math.min(60, value));
     }
 
+    private static int clampVideoRepeatCount(int value) {
+        return Math.max(1, Math.min(MAX_VIDEO_REPEAT_COUNT, value));
+    }
+
     private static long firstPositiveLongColumn(Cursor cursor, String... columnNames) {
         if (columnNames == null) {
             return 0L;
@@ -1757,6 +1856,9 @@ public final class MainActivity extends Activity {
         }
         if (isVideoSequenceSelected() && !visualVideoNames.isEmpty()) {
             return stripExtension(visualVideoNames.get(0)) + "-merged.mp4";
+        }
+        if (isSingleVideoSelected() && visualDisplayName != null && !visualDisplayName.trim().isEmpty()) {
+            return stripExtension(visualDisplayName) + "-looped.mp4";
         }
         String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
         return "AVTOHIT-" + timestamp + ".mp4";

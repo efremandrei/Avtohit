@@ -150,6 +150,35 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/videoRepeatTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/video_repeat_title"
+            android:textColor="@color/avtohit_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/videoRepeatValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/video_repeat_once"
+            android:textColor="@color/avtohit_muted"
+            android:textSize="13sp" />
+
+        <SeekBar
+            android:id="@+id/videoRepeatSeek"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="59"
+            android:progress="0"
+            android:progressTint="@color/avtohit_positive"
+            android:thumbTint="@color/avtohit_positive" />
+
+        <TextView
             android:id="@+id/exportSummary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
