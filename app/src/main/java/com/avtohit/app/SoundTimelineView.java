@@ -37,6 +37,10 @@ public final class SoundTimelineView extends View {
     private int selectedIndex = -1;
     private int activeMode = MODE_NONE;
     private float lastTouchY;
+    private boolean pinching;
+    private float initialPinchDistance;
+    private float initialZoomLevel = 1f;
+    private long pinchAnchorMs;
     private int backgroundColor = 0xFFF7F8F5;
     private int laneColor = 0xFFEEF3EF;
     private int borderColor = 0xFFD5DDD8;
@@ -117,18 +121,6 @@ public final class SoundTimelineView extends View {
     public void setPlaybackActive(boolean playbackActive) {
         this.playbackActive = playbackActive;
         invalidate();
-    }
-
-    public void zoomIn() {
-        setZoomLevel(Math.min(MAX_ZOOM, zoomLevel * 2f));
-    }
-
-    public void zoomOut() {
-        setZoomLevel(Math.max(MIN_ZOOM, zoomLevel / 2f));
-    }
-
-    public String zoomLabel() {
-        return String.format(Locale.US, "%.0fx", zoomLevel);
     }
 
     public void addCensorBeep() {
@@ -301,6 +293,7 @@ public final class SoundTimelineView extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 setParentIntercept(false);
+                pinching = false;
                 selectedIndex = hitEffect(event.getX(), event.getY(), geometry);
                 activeMode = selectedIndex >= 0 ? hitMode(event.getY(), geometry, effects.get(selectedIndex)) : MODE_NONE;
                 lastTouchY = event.getY();
@@ -309,7 +302,17 @@ public final class SoundTimelineView extends View {
                 }
                 invalidate();
                 return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (event.getPointerCount() >= 2) {
+                    beginPinch(event, geometry);
+                    return true;
+                }
+                return true;
             case MotionEvent.ACTION_MOVE:
+                if (pinching && event.getPointerCount() >= 2) {
+                    updatePinch(event);
+                    return true;
+                }
                 if (selectedIndex >= 0 && activeMode != MODE_NONE) {
                     moveSelected(yDeltaToMs(event.getY() - lastTouchY, geometry));
                     lastTouchY = event.getY();
@@ -318,15 +321,48 @@ public final class SoundTimelineView extends View {
                     setPlayheadMs(yToTime(event.getY(), geometry));
                 }
                 return true;
+            case MotionEvent.ACTION_POINTER_UP:
+                if (pinching && event.getPointerCount() <= 2) {
+                    pinching = false;
+                    activeMode = MODE_NONE;
+                    selectedIndex = -1;
+                }
+                return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 setParentIntercept(true);
+                pinching = false;
                 activeMode = MODE_NONE;
                 invalidate();
                 return true;
             default:
                 return true;
         }
+    }
+
+    private void beginPinch(MotionEvent event, Geometry geometry) {
+        setParentIntercept(false);
+        initialPinchDistance = Math.max(1f, pinchDistance(event));
+        initialZoomLevel = zoomLevel;
+        pinchAnchorMs = yToTime((event.getY(0) + event.getY(1)) / 2f, geometry);
+        selectedIndex = -1;
+        activeMode = MODE_NONE;
+        pinching = true;
+    }
+
+    private void updatePinch(MotionEvent event) {
+        float distance = Math.max(1f, pinchDistance(event));
+        float scale = distance / Math.max(1f, initialPinchDistance);
+        setZoomLevelAroundAnchor(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoomLevel * scale)), pinchAnchorMs);
+    }
+
+    private float pinchDistance(MotionEvent event) {
+        if (event.getPointerCount() < 2) {
+            return 1f;
+        }
+        float dx = event.getX(0) - event.getX(1);
+        float dy = event.getY(0) - event.getY(1);
+        return (float) Math.hypot(dx, dy);
     }
 
     private int hitEffect(float x, float y, Geometry geometry) {
@@ -402,6 +438,15 @@ public final class SoundTimelineView extends View {
         }
         zoomLevel = newZoomLevel;
         centerVisibleWindowOn(playheadMs);
+        invalidate();
+    }
+
+    private void setZoomLevelAroundAnchor(float newZoomLevel, long anchorMs) {
+        if (Math.abs(newZoomLevel - zoomLevel) < 0.01f) {
+            return;
+        }
+        zoomLevel = newZoomLevel;
+        centerVisibleWindowOn(anchorMs);
         invalidate();
     }
 

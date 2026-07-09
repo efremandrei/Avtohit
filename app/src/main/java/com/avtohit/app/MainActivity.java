@@ -991,13 +991,10 @@ public final class MainActivity extends Activity {
         TextView fileName = dialogView.findViewById(R.id.videoSoundEditorFile);
         TextView summary = dialogView.findViewById(R.id.videoSoundEditorSummary);
         SoundTimelineView timeline = dialogView.findViewById(R.id.soundTimeline);
-        Button backButton = dialogView.findViewById(R.id.videoSoundBackButton);
-        Button playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
+        ImageButton backButton = dialogView.findViewById(R.id.videoSoundBackButton);
+        ImageButton playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
         VideoView preview = dialogView.findViewById(R.id.videoSoundPreview);
         TextView previewHint = dialogView.findViewById(R.id.videoSoundPreviewHint);
-        Button zoomInButton = dialogView.findViewById(R.id.videoSoundZoomInButton);
-        Button zoomOutButton = dialogView.findViewById(R.id.videoSoundZoomOutButton);
-        TextView zoomLabel = dialogView.findViewById(R.id.videoSoundZoomLabel);
         Button addCensorBeep = dialogView.findViewById(R.id.addCensorBeepButton);
         Button addHighBeep = dialogView.findViewById(R.id.addHighBeepButton);
         Button addLowBeep = dialogView.findViewById(R.id.addLowBeepButton);
@@ -1013,21 +1010,12 @@ public final class MainActivity extends Activity {
         fileName.setText(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
         timeline.setDurationMs(editorDurationMs);
         timeline.setEffects(item.soundEffects);
-        zoomLabel.setText(timeline.zoomLabel());
         updateVideoSoundEditorSummary(summary, timeline, editorDurationMs);
         timeline.setOnEffectsChangedListener(() -> updateVideoSoundEditorSummary(summary, timeline, editorDurationMs));
         addCensorBeep.setOnClickListener(view -> timeline.addCensorBeep());
         addHighBeep.setOnClickListener(view -> timeline.addSoundEffect(VideoSoundEffect.TYPE_HIGH_BEEP));
         addLowBeep.setOnClickListener(view -> timeline.addSoundEffect(VideoSoundEffect.TYPE_LOW_BEEP));
         deleteEffect.setOnClickListener(view -> timeline.deleteSelected());
-        zoomInButton.setOnClickListener(view -> {
-            timeline.zoomIn();
-            zoomLabel.setText(timeline.zoomLabel());
-        });
-        zoomOutButton.setOnClickListener(view -> {
-            timeline.zoomOut();
-            zoomLabel.setText(timeline.zoomLabel());
-        });
         bindCollapsibleGroup(censorGroupHeader, censorGroupContent, R.string.sound_group_censor_expanded, R.string.sound_group_censor_collapsed, true);
         bindCollapsibleGroup(toneGroupHeader, toneGroupContent, R.string.sound_group_tones_expanded, R.string.sound_group_tones_collapsed, false);
         bindCollapsibleGroup(selectedGroupHeader, selectedGroupContent, R.string.sound_group_selected_expanded, R.string.sound_group_selected_collapsed, false);
@@ -1064,7 +1052,8 @@ public final class MainActivity extends Activity {
                 playbackActive[0] = false;
                 preview.pause();
                 timeline.setPlaybackActive(false);
-                playPauseButton.setText(R.string.video_sound_play);
+                playPauseButton.setImageResource(R.drawable.ic_play_arrow);
+                playPauseButton.setContentDescription(getString(R.string.video_sound_play));
                 mainHandler.removeCallbacks(playbackTicker[0]);
                 return;
             }
@@ -1079,7 +1068,8 @@ public final class MainActivity extends Activity {
             preview.start();
             playbackActive[0] = true;
             timeline.setPlaybackActive(true);
-            playPauseButton.setText(R.string.video_sound_pause);
+            playPauseButton.setImageResource(R.drawable.ic_pause);
+            playPauseButton.setContentDescription(getString(R.string.video_sound_pause));
             mainHandler.removeCallbacks(playbackTicker[0]);
             mainHandler.post(playbackTicker[0]);
         });
@@ -2831,18 +2821,12 @@ public final class MainActivity extends Activity {
             dialog.getWindow().setLayout(width, height);
         }
 
-        Button backButton = dialogView.findViewById(R.id.videoSoundBackButton);
-        Button playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
-        Button zoomInButton = dialogView.findViewById(R.id.videoSoundZoomInButton);
-        Button zoomOutButton = dialogView.findViewById(R.id.videoSoundZoomOutButton);
-        TextView zoomLabel = dialogView.findViewById(R.id.videoSoundZoomLabel);
+        ImageButton backButton = dialogView.findViewById(R.id.videoSoundBackButton);
+        ImageButton playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
         TextView previewHint = dialogView.findViewById(R.id.videoSoundPreviewHint);
         View previewFrame = dialogView.findViewById(R.id.videoSoundPreviewFrame);
-        styleBottomActionButton(backButton);
-        styleBottomActionButton(zoomInButton);
-        styleBottomActionButton(zoomOutButton);
-        styleZoomLabel(zoomLabel, summaryColor, textColor, borderColor);
-        stylePrimaryDialogButton(playPauseButton);
+        styleDialogIconButton(backButton, textColor, surfaceColor, borderColor);
+        styleDialogIconButton(playPauseButton, Color.WHITE, readyColor(), readyColor());
         if (previewHint != null) {
             previewHint.setTextColor(Color.WHITE);
         }
@@ -2865,16 +2849,17 @@ public final class MainActivity extends Activity {
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
     }
 
-    private void styleZoomLabel(TextView label, int fillColor, int textColor, int borderColor) {
-        if (label == null) {
+    private void styleDialogIconButton(ImageButton button, int iconColor, int fillColor, int borderColor) {
+        if (button == null) {
             return;
         }
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(fillColor);
-        drawable.setCornerRadius(dp(14));
+        drawable.setCornerRadius(dp(16));
         drawable.setStroke(dp(1), borderColor);
-        label.setBackground(drawable);
-        label.setTextColor(textColor);
+        button.setBackground(drawable);
+        button.setColorFilter(iconColor);
+        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
     private void stylePrimaryDialogButton(Button button) {

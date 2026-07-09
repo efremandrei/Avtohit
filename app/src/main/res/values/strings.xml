@@ -109,9 +109,6 @@
     <string name="video_sound_play">Play</string>
     <string name="video_sound_pause">Pause</string>
     <string name="video_sound_preview">Video preview</string>
-    <string name="video_sound_zoom_in">Zoom In</string>
-    <string name="video_sound_zoom_out">Zoom Out</string>
-    <string name="video_sound_zoom_default">1x</string>
     <string name="sound_catalog_title">Insert sound effects</string>
     <string name="sound_group_censor_expanded">Censor effects - open</string>
     <string name="sound_group_censor_collapsed">Censor effects - closed</string>
