@@ -1081,7 +1081,12 @@ public final class MainActivity extends Activity {
                     : getString(R.string.visual_video_sequence_no_duration);
         }
         if (isSingleVideoRepeatSelected() && visualDurationMs > 0L) {
-            return getString(R.string.visual_video_repeat_detail, formatDuration(visualDurationMs), videoRepeatSummary());
+            return getString(
+                    R.string.visual_video_repeat_detail,
+                    formatDuration(visualDurationMs),
+                    videoRepeatSummary(),
+                    videoRepeatEstimateDuration(videoRepeatCount)
+            );
         }
         if (visualIsVideo && visualDurationMs > 0L) {
             return getString(R.string.duration_value, formatDuration(visualDurationMs));
@@ -1112,11 +1117,29 @@ public final class MainActivity extends Activity {
         return repeats == 1 ? getString(R.string.video_repeat_once) : getString(R.string.video_repeat_times, repeats);
     }
 
+    private String videoRepeatSummaryWithEstimate(int repeatCount) {
+        String repeatSummary = videoRepeatSummary(repeatCount);
+        long totalDurationMs = repeatedVideoDurationMs(repeatCount);
+        if (totalDurationMs <= 0L) {
+            return getString(R.string.video_repeat_estimate_unavailable, repeatSummary);
+        }
+        return getString(R.string.video_repeat_with_estimate, repeatSummary, formatDuration(totalDurationMs));
+    }
+
+    private String videoRepeatEstimateDuration(int repeatCount) {
+        long totalDurationMs = repeatedVideoDurationMs(repeatCount);
+        return totalDurationMs > 0L ? formatDuration(totalDurationMs) : getString(R.string.video_repeat_length_unavailable);
+    }
+
     private long repeatedVideoDurationMs() {
+        return repeatedVideoDurationMs(videoRepeatCount);
+    }
+
+    private long repeatedVideoDurationMs(int repeatCount) {
         if (visualDurationMs <= 0L) {
             return 0L;
         }
-        return visualDurationMs * (long) clampVideoRepeatCount(videoRepeatCount);
+        return visualDurationMs * (long) clampVideoRepeatCount(repeatCount);
     }
 
     private void styleReadinessLabels() {
@@ -1531,7 +1554,8 @@ public final class MainActivity extends Activity {
                     resolutionLabel,
                     directionLabel,
                     selectedFrameRate,
-                    videoRepeatSummary(clampVideoRepeatCount(videoRepeatSeek.getProgress() + 1))
+                    videoRepeatSummary(clampVideoRepeatCount(videoRepeatSeek.getProgress() + 1)),
+                    videoRepeatEstimateDuration(clampVideoRepeatCount(videoRepeatSeek.getProgress() + 1))
             ));
         } else {
             exportSummary.setText(getString(R.string.export_summary, resolutionLabel, directionLabel, selectedFrameRate));
@@ -1543,7 +1567,7 @@ public final class MainActivity extends Activity {
     }
 
     private void updateVideoRepeatValue(SeekBar seekBar, TextView videoRepeatValue) {
-        videoRepeatValue.setText(videoRepeatSummary(clampVideoRepeatCount(seekBar.getProgress() + 1)));
+        videoRepeatValue.setText(videoRepeatSummaryWithEstimate(clampVideoRepeatCount(seekBar.getProgress() + 1)));
     }
 
     private void updateSkinSummary(RadioGroup skinGroup, TextView skinSummary) {
