@@ -248,6 +248,9 @@ public final class MainActivity extends Activity {
     private TextView visualReadiness;
     private TextView audioReadiness;
     private TextView exportReadiness;
+    private TextView mediaListTitle;
+    private TextView mediaListHint;
+    private TextView mediaListEmptyState;
     private TextView previewEmptyState;
     private TextView previewModeLabel;
     private TextView previewTime;
@@ -266,6 +269,7 @@ public final class MainActivity extends Activity {
     private ProgressBar progress;
     private LinearLayout rootContainer;
     private LinearLayout bottomActionsBar;
+    private LinearLayout mediaInlineList;
     private View statusBarSpacer;
     private View projectSummaryCard;
     private View previewCard;
@@ -396,6 +400,9 @@ public final class MainActivity extends Activity {
         visualReadiness = findViewById(R.id.visualReadiness);
         audioReadiness = findViewById(R.id.audioReadiness);
         exportReadiness = findViewById(R.id.exportReadiness);
+        mediaListTitle = findViewById(R.id.mediaListTitle);
+        mediaListHint = findViewById(R.id.mediaListHint);
+        mediaListEmptyState = findViewById(R.id.mediaListEmptyState);
         previewArtwork = findViewById(R.id.previewArtwork);
         previewEmptyState = findViewById(R.id.previewEmptyState);
         previewModeLabel = findViewById(R.id.previewModeLabel);
@@ -414,6 +421,7 @@ public final class MainActivity extends Activity {
         progress = findViewById(R.id.progress);
         rootContainer = findViewById(R.id.rootContainer);
         bottomActionsBar = findViewById(R.id.bottomActionsBar);
+        mediaInlineList = findViewById(R.id.mediaInlineList);
         statusBarSpacer = findViewById(R.id.statusBarSpacer);
         projectSummaryCard = findViewById(R.id.projectSummaryCard);
         previewCard = findViewById(R.id.previewCard);
@@ -668,7 +676,6 @@ public final class MainActivity extends Activity {
         visualIsVideo = false;
         visualDurationMs = 0L;
         status.setText(R.string.ready);
-        mainHandler.post(this::showVisualOrderDialog);
     }
 
     private void handleVideoSequenceSelection(List<VideoSelection> videoSelections) {
@@ -691,7 +698,6 @@ public final class MainActivity extends Activity {
         visualIsVideo = true;
         visualDurationMs = totalDurationMs;
         status.setText(R.string.ready);
-        mainHandler.post(this::showVisualOrderDialog);
     }
 
     private void handleSingleVisualSelection(Uri uri) {
@@ -797,6 +803,10 @@ public final class MainActivity extends Activity {
     }
 
     private void renderVisualOrderRows(LinearLayout listContainer, ArrayList<VisualOrderItem> items) {
+        renderVisualOrderRows(listContainer, items, false);
+    }
+
+    private void renderVisualOrderRows(LinearLayout listContainer, ArrayList<VisualOrderItem> items, boolean commitOnChange) {
         listContainer.removeAllViews();
 
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -831,18 +841,18 @@ public final class MainActivity extends Activity {
                 row.setAlpha(started ? 0.45f : 1f);
                 return started;
             });
-            row.setOnDragListener((view, event) -> handleVisualOrderRowDrag(event, listContainer, items, item, row));
+            row.setOnDragListener((view, event) -> handleVisualOrderRowDrag(event, listContainer, items, item, row, commitOnChange));
             duplicateButton.setOnClickListener(view -> {
                 int index = items.indexOf(item);
                 items.add(index >= 0 ? index + 1 : items.size(), item.duplicate());
-                renderVisualOrderRows(listContainer, items);
+                handleVisualOrderListChanged(listContainer, items, commitOnChange);
             });
             removeButton.setOnClickListener(view -> {
                 if (items.size() <= 1) {
                     return;
                 }
                 items.remove(item);
-                renderVisualOrderRows(listContainer, items);
+                handleVisualOrderListChanged(listContainer, items, commitOnChange);
             });
 
             listContainer.addView(row);
@@ -854,7 +864,8 @@ public final class MainActivity extends Activity {
             LinearLayout listContainer,
             ArrayList<VisualOrderItem> items,
             VisualOrderItem targetItem,
-            View row
+            View row,
+            boolean commitOnChange
     ) {
         if (!(event.getLocalState() instanceof VisualOrderItem)) {
             return false;
@@ -874,7 +885,7 @@ public final class MainActivity extends Activity {
                     targetIndex++;
                 }
                 moveVisualOrderItemToIndex(items, (VisualOrderItem) event.getLocalState(), targetIndex);
-                renderVisualOrderRows(listContainer, items);
+                handleVisualOrderListChanged(listContainer, items, commitOnChange);
                 return true;
             case DragEvent.ACTION_DRAG_ENDED:
                 row.setAlpha(1f);
@@ -882,6 +893,15 @@ public final class MainActivity extends Activity {
             default:
                 return true;
         }
+    }
+
+    private void handleVisualOrderListChanged(LinearLayout listContainer, ArrayList<VisualOrderItem> items, boolean commitOnChange) {
+        if (commitOnChange) {
+            applyVisualOrderItems(items);
+            refreshUi();
+            return;
+        }
+        renderVisualOrderRows(listContainer, items, false);
     }
 
     private void moveVisualOrderItemToIndex(ArrayList<VisualOrderItem> items, VisualOrderItem draggedItem, int targetIndex) {
@@ -1244,6 +1264,7 @@ public final class MainActivity extends Activity {
 
     private void refreshUi() {
         refreshProjectHeader();
+        refreshMediaInlineList();
         refreshPreview();
         updateActions();
     }
@@ -1280,6 +1301,35 @@ public final class MainActivity extends Activity {
         if (audioUri == null && visualUri == null) {
             status.setText(R.string.empty_project_status);
         }
+    }
+
+    private void refreshMediaInlineList() {
+        if (mediaInlineList == null || mediaListEmptyState == null) {
+            return;
+        }
+        if (mediaListTitle != null) {
+            mediaListTitle.setTextColor(currentSkin.textColor);
+        }
+        if (mediaListHint != null) {
+            mediaListHint.setTextColor(currentSkin.mutedColor);
+        }
+
+        GradientDrawable emptyDrawable = new GradientDrawable();
+        emptyDrawable.setColor(currentSkin.surfaceAltColor);
+        emptyDrawable.setCornerRadius(dp(16));
+        emptyDrawable.setStroke(dp(1), currentSkin.borderColor);
+        mediaListEmptyState.setBackground(emptyDrawable);
+        mediaListEmptyState.setTextColor(currentSkin.mutedColor);
+
+        ArrayList<VisualOrderItem> items = currentVisualOrderItems();
+        if (items.isEmpty()) {
+            mediaInlineList.setVisibility(View.GONE);
+            mediaListEmptyState.setVisibility(View.VISIBLE);
+            return;
+        }
+        mediaListEmptyState.setVisibility(View.GONE);
+        mediaInlineList.setVisibility(View.VISIBLE);
+        renderVisualOrderRows(mediaInlineList, items, true);
     }
 
     private String visualSummaryText() {
@@ -1449,6 +1499,7 @@ public final class MainActivity extends Activity {
         visualSummaryRow.setEnabled(!rendering);
         audioSummaryRow.setEnabled(!rendering);
         exportSummaryRow.setEnabled(canOpenMergeMenu);
+        setViewTreeEnabled(mediaInlineList, !rendering);
         helpButton.setEnabled(true);
         skinButton.setEnabled(true);
         aboutButton.setEnabled(true);
@@ -1456,6 +1507,19 @@ public final class MainActivity extends Activity {
         previewSeek.setEnabled(!rendering && audioUri != null);
         progress.setVisibility(rendering ? View.VISIBLE : View.GONE);
         playButton.setAlpha(playButton.isEnabled() ? 1f : 0.45f);
+    }
+
+    private void setViewTreeEnabled(View view, boolean enabled) {
+        if (view == null) {
+            return;
+        }
+        view.setEnabled(enabled);
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                setViewTreeEnabled(group.getChildAt(i), enabled);
+            }
+        }
     }
 
     private void showExportDialog(boolean startExportWhenSaved) {
@@ -2299,6 +2363,7 @@ public final class MainActivity extends Activity {
         summaryDividerOne.setBackgroundColor(currentSkin.borderColor);
         summaryDividerTwo.setBackgroundColor(currentSkin.borderColor);
         previewTitle.setTextColor(currentSkin.textColor);
+        refreshMediaInlineList();
 
         updateSystemBars();
     }
