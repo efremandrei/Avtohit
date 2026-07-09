@@ -38,6 +38,7 @@ import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.VideoView;
 
 import com.avtohit.app.media.AvtohitException;
 import com.avtohit.app.media.AvtohitProcessor;
@@ -990,6 +991,10 @@ public final class MainActivity extends Activity {
         TextView fileName = dialogView.findViewById(R.id.videoSoundEditorFile);
         TextView summary = dialogView.findViewById(R.id.videoSoundEditorSummary);
         SoundTimelineView timeline = dialogView.findViewById(R.id.soundTimeline);
+        Button backButton = dialogView.findViewById(R.id.videoSoundBackButton);
+        Button playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
+        VideoView preview = dialogView.findViewById(R.id.videoSoundPreview);
+        TextView previewHint = dialogView.findViewById(R.id.videoSoundPreviewHint);
         Button addCensorBeep = dialogView.findViewById(R.id.addCensorBeepButton);
         Button deleteEffect = dialogView.findViewById(R.id.deleteSoundEffectButton);
 
@@ -1001,6 +1006,58 @@ public final class MainActivity extends Activity {
         timeline.setOnEffectsChangedListener(() -> updateVideoSoundEditorSummary(summary, timeline, editorDurationMs));
         addCensorBeep.setOnClickListener(view -> timeline.addCensorBeep());
         deleteEffect.setOnClickListener(view -> timeline.deleteSelected());
+        preview.setVideoURI(item.uri);
+
+        final boolean[] previewReady = new boolean[]{false};
+        final boolean[] playbackActive = new boolean[]{false};
+        final Runnable[] playbackTicker = new Runnable[1];
+        playbackTicker[0] = new Runnable() {
+            @Override
+            public void run() {
+                if (!playbackActive[0]) {
+                    return;
+                }
+                long currentPositionMs = Math.max(0, preview.getCurrentPosition());
+                timeline.setPlayheadMs(currentPositionMs);
+                mainHandler.postDelayed(this, 120L);
+            }
+        };
+        preview.setOnPreparedListener(mediaPlayer -> {
+            previewReady[0] = true;
+            mediaPlayer.setLooping(true);
+            preview.seekTo(0);
+            preview.pause();
+            previewHint.setVisibility(View.GONE);
+        });
+        preview.setOnErrorListener((mediaPlayer, what, extra) -> {
+            previewReady[0] = false;
+            previewHint.setVisibility(View.VISIBLE);
+            return true;
+        });
+        playPauseButton.setOnClickListener(view -> {
+            if (preview.isPlaying()) {
+                playbackActive[0] = false;
+                preview.pause();
+                timeline.setPlaybackActive(false);
+                playPauseButton.setText(R.string.video_sound_play);
+                mainHandler.removeCallbacks(playbackTicker[0]);
+                return;
+            }
+            if (previewReady[0]) {
+                long playheadMs = timeline.playheadMs();
+                if (playheadMs >= editorDurationMs - 100L) {
+                    playheadMs = 0L;
+                    timeline.setPlayheadMs(0L);
+                }
+                preview.seekTo((int) Math.min(Integer.MAX_VALUE, Math.max(0L, playheadMs)));
+            }
+            preview.start();
+            playbackActive[0] = true;
+            timeline.setPlaybackActive(true);
+            playPauseButton.setText(R.string.video_sound_pause);
+            mainHandler.removeCallbacks(playbackTicker[0]);
+            mainHandler.post(playbackTicker[0]);
+        });
 
         TextView dialogTitle = buildDialogTitle(R.string.video_sound_editor_title);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -1014,6 +1071,13 @@ public final class MainActivity extends Activity {
                 })
                 .create();
         dialog.setOnShowListener(unused -> styleVideoSoundEditorDialog(dialog, dialogTitle, dialogView, timeline));
+        dialog.setOnDismissListener(unused -> {
+            playbackActive[0] = false;
+            timeline.setPlaybackActive(false);
+            mainHandler.removeCallbacks(playbackTicker[0]);
+            preview.stopPlayback();
+        });
+        backButton.setOnClickListener(view -> dialog.dismiss());
         dialog.show();
     }
 
@@ -2722,8 +2786,57 @@ public final class MainActivity extends Activity {
         int borderColor = palette[3];
         styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.videoSoundEditorContent), textColor, surfaceColor);
         timeline.setPalette(surfaceColor, summaryColor, borderColor, textColor, currentSkin.mutedColor, neededColor());
+        if (dialog.getWindow() != null) {
+            int width = Math.max(dp(320), getResources().getDisplayMetrics().widthPixels - dp(10));
+            int height = Math.max(dp(620), getResources().getDisplayMetrics().heightPixels - dp(24));
+            dialog.getWindow().setLayout(width, height);
+        }
+
+        Button backButton = dialogView.findViewById(R.id.videoSoundBackButton);
+        Button playPauseButton = dialogView.findViewById(R.id.videoSoundPlayPauseButton);
+        TextView previewHint = dialogView.findViewById(R.id.videoSoundPreviewHint);
+        View previewFrame = dialogView.findViewById(R.id.videoSoundPreviewFrame);
+        styleBottomActionButton(backButton);
+        stylePrimaryDialogButton(playPauseButton);
+        if (previewHint != null) {
+            previewHint.setTextColor(Color.WHITE);
+        }
+        if (previewFrame != null) {
+            GradientDrawable previewDrawable = new GradientDrawable();
+            previewDrawable.setColor(Color.BLACK);
+            previewDrawable.setCornerRadius(dp(18));
+            previewDrawable.setStroke(dp(1), borderColor);
+            previewFrame.setBackground(previewDrawable);
+        }
+
+        stylePrimaryDialogButton(dialogView.findViewById(R.id.addCensorBeepButton));
+        styleNegativeDialogButton(dialogView.findViewById(R.id.deleteSoundEffectButton));
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void stylePrimaryDialogButton(Button button) {
+        if (button == null) {
+            return;
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(readyColor());
+        drawable.setCornerRadius(dp(16));
+        button.setBackground(drawable);
+        button.setTextColor(Color.WHITE);
+        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
+    }
+
+    private void styleNegativeDialogButton(Button button) {
+        if (button == null) {
+            return;
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(neededColor());
+        drawable.setCornerRadius(dp(16));
+        button.setBackground(drawable);
+        button.setTextColor(Color.WHITE);
+        button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
 
     private void styleVisualOrderRow(View row) {

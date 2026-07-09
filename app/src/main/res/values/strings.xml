@@ -105,6 +105,10 @@
     <string name="edit_video_sound">Edit video sound</string>
     <string name="video_sound_editor_title">Edit Video Sound</string>
     <string name="video_sound_editor_summary">Duration: %1$s. Effects: %2$d</string>
+    <string name="video_sound_back">Back</string>
+    <string name="video_sound_play">Play</string>
+    <string name="video_sound_pause">Pause</string>
+    <string name="video_sound_preview">Video preview</string>
     <string name="sound_catalog_title">Insert sound effects</string>
     <string name="sound_effect_censor_beep">Insert censor beep</string>
     <string name="sound_effect_delete_selected">Delete selected</string>

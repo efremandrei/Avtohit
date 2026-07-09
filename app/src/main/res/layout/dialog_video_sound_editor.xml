@@ -9,15 +9,44 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingTop="12dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="12dp">
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp">
+
+        <LinearLayout
+            android:id="@+id/videoSoundControlRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/videoSoundBackButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="@string/video_sound_back"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/videoSoundPlayPauseButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_primary_button"
+                android:text="@string/video_sound_play"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="16sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/videoSoundEditorFile"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:breakStrategy="simple"
             android:textColor="@color/avtohit_text"
             android:textSize="14sp"
@@ -31,11 +60,34 @@
             android:textColor="@color/avtohit_muted"
             android:textSize="13sp" />
 
+        <FrameLayout
+            android:id="@+id/videoSoundPreviewFrame"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:layout_marginTop="12dp"
+            android:clipToOutline="true">
+
+            <VideoView
+                android:id="@+id/videoSoundPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <TextView
+                android:id="@+id/videoSoundPreviewHint"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="@string/video_sound_preview"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
         <com.avtohit.app.SoundTimelineView
             android:id="@+id/soundTimeline"
             android:layout_width="match_parent"
-            android:layout_height="220dp"
-            android:layout_marginTop="14dp" />
+            android:layout_height="430dp"
+            android:layout_marginTop="12dp" />
 
         <TextView
             android:id="@+id/soundCatalogTitle"
