@@ -60,6 +60,43 @@
             android:textColor="@color/avtohit_muted"
             android:textSize="13sp" />
 
+        <LinearLayout
+            android:id="@+id/videoSoundZoomRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/videoSoundZoomOutButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="@string/video_sound_zoom_out"
+                android:textAllCaps="false"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/videoSoundZoomLabel"
+                android:layout_width="80dp"
+                android:layout_height="46dp"
+                android:gravity="center"
+                android:text="@string/video_sound_zoom_default"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/videoSoundZoomInButton"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/video_sound_zoom_in"
+                android:textAllCaps="false"
+                android:textSize="15sp" />
+        </LinearLayout>
+
         <FrameLayout
             android:id="@+id/videoSoundPreviewFrame"
             android:layout_width="match_parent"
@@ -99,7 +136,17 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/soundGroupCensorHeader"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/sound_group_censor_expanded"
+            android:textAllCaps="false"
+            android:textSize="15sp" />
+
         <LinearLayout
+            android:id="@+id/soundGroupCensorContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -107,21 +154,77 @@
 
             <Button
                 android:id="@+id/addCensorBeepButton"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
                 android:background="@drawable/bg_primary_button"
                 android:text="@string/sound_effect_censor_beep"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
                 android:textSize="14sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/soundGroupToneHeader"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/sound_group_tones_collapsed"
+            android:textAllCaps="false"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:id="@+id/soundGroupToneContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <Button
-                android:id="@+id/deleteSoundEffectButton"
+                android:id="@+id/addHighBeepButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_primary_button"
+                android:text="@string/sound_effect_high_beep"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/addLowBeepButton"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
+                android:background="@drawable/bg_primary_button"
+                android:text="@string/sound_effect_low_beep"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/soundGroupSelectedHeader"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/sound_group_selected_collapsed"
+            android:textAllCaps="false"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:id="@+id/soundGroupSelectedContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/deleteSoundEffectButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
                 android:background="@drawable/bg_negative_button"
                 android:text="@string/sound_effect_delete_selected"
                 android:textAllCaps="false"

@@ -1316,7 +1316,9 @@ public final class AvtohitProcessor {
                 .append("[base];");
         for (int i = 0; i < soundEffects.size(); i++) {
             VideoSoundEffect effect = soundEffects.get(i);
-            filter.append("sine=frequency=1000:sample_rate=44100:duration=")
+            filter.append("sine=frequency=")
+                    .append(soundEffectFrequency(effect.type))
+                    .append(":sample_rate=44100:duration=")
                     .append(formatSeconds(effect.durationMs))
                     .append(",volume=0.85,adelay=")
                     .append(effect.startMs)
@@ -1356,6 +1358,16 @@ public final class AvtohitProcessor {
         args.add("+faststart");
         args.add(outputFile.getAbsolutePath());
         return args;
+    }
+
+    private static int soundEffectFrequency(String type) {
+        if (VideoSoundEffect.TYPE_HIGH_BEEP.equals(type)) {
+            return 1600;
+        }
+        if (VideoSoundEffect.TYPE_LOW_BEEP.equals(type)) {
+            return 420;
+        }
+        return 1000;
     }
 
     private static List<String> buildAutoSplitSlideshowCycleCommand(

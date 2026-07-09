@@ -13,6 +13,7 @@ import com.avtohit.app.media.VideoSoundEffect;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class SoundTimelineView extends View {
     public interface OnEffectsChangedListener {
@@ -23,12 +24,16 @@ public final class SoundTimelineView extends View {
     private static final int MODE_DRAG = 1;
     private static final int MODE_RESIZE_START = 2;
     private static final int MODE_RESIZE_END = 3;
+    private static final float MIN_ZOOM = 1f;
+    private static final float MAX_ZOOM = 16f;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF scratch = new RectF();
     private final ArrayList<VideoSoundEffect> effects = new ArrayList<>();
     private long durationMs = 1L;
     private long playheadMs = 0L;
+    private long visibleStartMs = 0L;
+    private float zoomLevel = 1f;
     private int selectedIndex = -1;
     private int activeMode = MODE_NONE;
     private float lastTouchY;
@@ -74,6 +79,7 @@ public final class SoundTimelineView extends View {
         this.durationMs = Math.max(1L, durationMs);
         playheadMs = clamp(playheadMs, 0L, this.durationMs);
         clampEffects();
+        clampVisibleWindow();
         invalidate();
     }
 
@@ -104,6 +110,7 @@ public final class SoundTimelineView extends View {
 
     public void setPlayheadMs(long playheadMs) {
         this.playheadMs = clamp(playheadMs, 0L, durationMs);
+        keepPlayheadVisible();
         invalidate();
     }
 
@@ -112,13 +119,30 @@ public final class SoundTimelineView extends View {
         invalidate();
     }
 
+    public void zoomIn() {
+        setZoomLevel(Math.min(MAX_ZOOM, zoomLevel * 2f));
+    }
+
+    public void zoomOut() {
+        setZoomLevel(Math.max(MIN_ZOOM, zoomLevel / 2f));
+    }
+
+    public String zoomLabel() {
+        return String.format(Locale.US, "%.0fx", zoomLevel);
+    }
+
     public void addCensorBeep() {
+        addSoundEffect(VideoSoundEffect.TYPE_CENSOR_BEEP);
+    }
+
+    public void addSoundEffect(String type) {
         long startMs = playheadMs;
         if (!effects.isEmpty() && startMs <= 0L) {
             startMs = Math.min(durationMs - VideoSoundEffect.MIN_DURATION_MS, effects.get(effects.size() - 1).endMs() + 250L);
         }
+        startMs = clamp(startMs, 0L, Math.max(0L, durationMs - VideoSoundEffect.MIN_DURATION_MS));
         long duration = Math.min(VideoSoundEffect.DEFAULT_DURATION_MS, Math.max(VideoSoundEffect.MIN_DURATION_MS, durationMs - startMs));
-        effects.add(new VideoSoundEffect(VideoSoundEffect.TYPE_CENSOR_BEEP, Math.max(0L, startMs), duration));
+        effects.add(new VideoSoundEffect(type, Math.max(0L, startMs), duration));
         selectedIndex = effects.size() - 1;
         notifyChanged();
     }
@@ -145,7 +169,8 @@ public final class SoundTimelineView extends View {
         drawLabel(canvas, "Audio", geometry.audioLeft, dp(24), textColor, true, dp(15));
         drawLane(canvas, geometry.videoLeft, geometry.top, geometry.videoRight, geometry.bottom);
         drawLane(canvas, geometry.audioLeft, geometry.top, geometry.audioRight, geometry.bottom);
-        drawVideoTicks(canvas, geometry);
+        drawTimeTicks(canvas, geometry);
+        drawVideoMarks(canvas, geometry);
         drawAudioWave(canvas, geometry);
         drawEffects(canvas, geometry);
         drawPlayhead(canvas, geometry);
@@ -155,75 +180,86 @@ public final class SoundTimelineView extends View {
         scratch.set(left, top, right, bottom);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(laneColor);
-        canvas.drawRoundRect(scratch, dp(18), dp(18), paint);
+        canvas.drawRoundRect(scratch, dp(12), dp(12), paint);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(dp(1));
         paint.setColor(borderColor);
-        canvas.drawRoundRect(scratch, dp(18), dp(18), paint);
+        canvas.drawRoundRect(scratch, dp(12), dp(12), paint);
     }
 
-    private void drawVideoTicks(Canvas canvas, Geometry geometry) {
+    private void drawTimeTicks(Canvas canvas, Geometry geometry) {
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(dp(2));
-        paint.setColor(mutedColor);
-        int ticks = 10;
+        paint.setStrokeWidth(1f);
+        paint.setColor(borderColor);
+        int ticks = 6;
+        long windowDurationMs = visibleDurationMs();
         for (int i = 0; i <= ticks; i++) {
-            float y = geometry.top + ((geometry.bottom - geometry.top) * i / ticks);
-            canvas.drawLine(geometry.videoLeft + dp(14), y, geometry.videoRight - dp(14), y, paint);
+            long tickTimeMs = visibleStartMs + Math.round(windowDurationMs * (i / (double) ticks));
+            float y = timeToY(tickTimeMs, geometry);
+            canvas.drawLine(geometry.videoLeft, y, geometry.audioRight, y, paint);
+            drawLabel(canvas, formatTimelineTime(tickTimeMs), geometry.timeLabelLeft, y + dp(4), mutedColor, false, dp(10));
         }
+    }
 
+    private void drawVideoMarks(Canvas canvas, Geometry geometry) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(mutedColor);
-        float frameHeight = Math.max(dp(34), (geometry.bottom - geometry.top - dp(54)) / 7f);
-        float left = geometry.videoLeft + dp(18);
-        float right = geometry.videoRight - dp(18);
-        for (int i = 0; i < 6; i++) {
-            float top = geometry.top + dp(18) + i * (frameHeight + dp(8));
-            if (top + frameHeight > geometry.bottom - dp(18)) {
+        paint.setAlpha(35);
+        int frameCount = 7;
+        float frameHeight = Math.max(dp(18), (geometry.bottom - geometry.top - dp(42)) / 11f);
+        float left = geometry.videoLeft + dp(10);
+        float right = geometry.videoRight - dp(10);
+        for (int i = 0; i < frameCount; i++) {
+            float top = geometry.top + dp(14) + i * (frameHeight + dp(12));
+            if (top + frameHeight > geometry.bottom - dp(14)) {
                 break;
             }
             scratch.set(left, top, right, top + frameHeight);
-            paint.setAlpha(42);
-            canvas.drawRoundRect(scratch, dp(10), dp(10), paint);
-            paint.setAlpha(255);
+            canvas.drawRoundRect(scratch, dp(6), dp(6), paint);
         }
+        paint.setAlpha(255);
     }
 
     private void drawAudioWave(Canvas canvas, Geometry geometry) {
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(dp(2));
+        paint.setStrokeWidth(1.25f);
         paint.setColor(mutedColor);
         float centerX = (geometry.audioLeft + geometry.audioRight) / 2f;
-        int steps = 54;
+        int steps = 64;
         for (int i = 0; i < steps; i++) {
             float y = geometry.top + ((geometry.bottom - geometry.top) * i / Math.max(1, steps - 1));
-            float width = dp(12 + (i % 6) * 7);
+            float width = dp(5 + (i % 6) * 4);
             canvas.drawLine(centerX - width, y, centerX + width, y, paint);
         }
     }
 
     private void drawEffects(Canvas canvas, Geometry geometry) {
+        long visibleEndMs = visibleStartMs + visibleDurationMs();
         for (int i = 0; i < effects.size(); i++) {
             VideoSoundEffect effect = effects.get(i);
-            float effectTop = timeToY(effect.startMs, geometry);
-            float effectBottom = timeToY(effect.endMs(), geometry);
+            if (effect.endMs() < visibleStartMs || effect.startMs > visibleEndMs) {
+                continue;
+            }
+
+            float effectTop = timeToY(Math.max(effect.startMs, visibleStartMs), geometry);
+            float effectBottom = timeToY(Math.min(effect.endMs(), visibleEndMs), geometry);
             scratch.set(
-                    geometry.audioLeft + dp(8),
+                    geometry.audioLeft + dp(10),
                     effectTop,
-                    geometry.audioRight - dp(8),
-                    Math.max(effectTop + dp(58), effectBottom)
+                    geometry.audioRight - dp(10),
+                    Math.max(effectTop + dp(54), effectBottom)
             );
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(i == selectedIndex ? accentColor : 0xFFC75D2C);
-            canvas.drawRoundRect(scratch, dp(16), dp(16), paint);
+            canvas.drawRoundRect(scratch, dp(14), dp(14), paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(dp(2));
             paint.setColor(0xFFFFFFFF);
-            canvas.drawRoundRect(scratch, dp(16), dp(16), paint);
+            canvas.drawRoundRect(scratch, dp(14), dp(14), paint);
 
             drawEffectHandle(canvas, scratch.centerX(), scratch.top + dp(11));
             drawEffectHandle(canvas, scratch.centerX(), scratch.bottom - dp(11));
-            drawLabel(canvas, "BIP", scratch.left + dp(16), scratch.centerY() + dp(6), 0xFFFFFFFF, true, dp(18));
+            drawLabel(canvas, effectLabel(effect.type), scratch.left + dp(14), scratch.centerY() + dp(6), 0xFFFFFFFF, true, dp(17));
         }
     }
 
@@ -247,6 +283,7 @@ public final class SoundTimelineView extends View {
         paint.setStyle(Paint.Style.FILL);
         scratch.set(geometry.videoLeft - dp(4), y - dp(8), geometry.videoLeft + dp(12), y + dp(8));
         canvas.drawRoundRect(scratch, dp(4), dp(4), paint);
+        drawLabel(canvas, formatTimelineTime(playheadMs), geometry.audioRight - dp(44), y - dp(8), textColor, true, dp(10));
     }
 
     private void drawLabel(Canvas canvas, String text, float x, float y, int color, boolean bold, int sizePx) {
@@ -296,10 +333,14 @@ public final class SoundTimelineView extends View {
         if (x < geometry.audioLeft || x > geometry.audioRight || y < geometry.top || y > geometry.bottom) {
             return -1;
         }
+        long visibleEndMs = visibleStartMs + visibleDurationMs();
         for (int i = effects.size() - 1; i >= 0; i--) {
             VideoSoundEffect effect = effects.get(i);
-            float effectTop = timeToY(effect.startMs, geometry);
-            float effectBottom = Math.max(effectTop + dp(58), timeToY(effect.endMs(), geometry));
+            if (effect.endMs() < visibleStartMs || effect.startMs > visibleEndMs) {
+                continue;
+            }
+            float effectTop = timeToY(Math.max(effect.startMs, visibleStartMs), geometry);
+            float effectBottom = Math.max(effectTop + dp(54), timeToY(Math.min(effect.endMs(), visibleEndMs), geometry));
             if (y >= effectTop && y <= effectBottom) {
                 return i;
             }
@@ -308,8 +349,9 @@ public final class SoundTimelineView extends View {
     }
 
     private int hitMode(float y, Geometry geometry, VideoSoundEffect effect) {
-        float effectTop = timeToY(effect.startMs, geometry);
-        float effectBottom = Math.max(effectTop + dp(58), timeToY(effect.endMs(), geometry));
+        long visibleEndMs = visibleStartMs + visibleDurationMs();
+        float effectTop = timeToY(Math.max(effect.startMs, visibleStartMs), geometry);
+        float effectBottom = Math.max(effectTop + dp(54), timeToY(Math.min(effect.endMs(), visibleEndMs), geometry));
         float edge = dp(30);
         if (Math.abs(y - effectTop) <= edge) {
             return MODE_RESIZE_START;
@@ -335,7 +377,7 @@ public final class SoundTimelineView extends View {
             duration = end - start;
         }
         effects.set(selectedIndex, new VideoSoundEffect(effect.type, start, duration));
-        playheadMs = clamp(start, 0L, durationMs);
+        setPlayheadMs(start);
     }
 
     private boolean insideTimeline(float x, float y, Geometry geometry) {
@@ -354,37 +396,92 @@ public final class SoundTimelineView extends View {
         return new VideoSoundEffect(effect.type, start, duration);
     }
 
+    private void setZoomLevel(float newZoomLevel) {
+        if (Math.abs(newZoomLevel - zoomLevel) < 0.01f) {
+            return;
+        }
+        zoomLevel = newZoomLevel;
+        centerVisibleWindowOn(playheadMs);
+        invalidate();
+    }
+
+    private void keepPlayheadVisible() {
+        long windowDurationMs = visibleDurationMs();
+        long maxStartMs = Math.max(0L, durationMs - windowDurationMs);
+        if (playheadMs < visibleStartMs) {
+            visibleStartMs = playheadMs;
+        } else if (playheadMs > visibleStartMs + windowDurationMs) {
+            visibleStartMs = playheadMs - windowDurationMs;
+        }
+        visibleStartMs = clamp(visibleStartMs, 0L, maxStartMs);
+    }
+
+    private void centerVisibleWindowOn(long anchorMs) {
+        long windowDurationMs = visibleDurationMs();
+        long maxStartMs = Math.max(0L, durationMs - windowDurationMs);
+        visibleStartMs = clamp(anchorMs - (windowDurationMs / 2L), 0L, maxStartMs);
+    }
+
+    private void clampVisibleWindow() {
+        visibleStartMs = clamp(visibleStartMs, 0L, Math.max(0L, durationMs - visibleDurationMs()));
+    }
+
+    private long visibleDurationMs() {
+        if (zoomLevel <= MIN_ZOOM) {
+            return durationMs;
+        }
+        return Math.max(1000L, Math.round(durationMs / zoomLevel));
+    }
+
     private Geometry geometry() {
-        float left = dp(12);
-        float right = getWidth() - dp(12);
+        float left = dp(10);
+        float right = getWidth() - dp(10);
         float top = dp(42);
         float bottom = Math.max(top + dp(240), getHeight() - dp(18));
-        float gap = dp(12);
-        float available = Math.max(dp(240), right - left - gap);
-        float videoWidth = Math.max(dp(98), available * 0.34f);
-        float audioWidth = Math.max(dp(140), available - videoWidth);
-        if (videoWidth + audioWidth + gap > right - left) {
-            audioWidth = Math.max(dp(120), right - left - gap - videoWidth);
-        }
-        float videoLeft = left;
-        float videoRight = videoLeft + videoWidth;
+        float labelWidth = dp(42);
+        float gap = dp(8);
+        float lanesLeft = left + labelWidth;
+        float available = Math.max(dp(240), right - lanesLeft - gap);
+        float laneWidth = available / 2f;
+        float videoLeft = lanesLeft;
+        float videoRight = videoLeft + laneWidth;
         float audioLeft = videoRight + gap;
-        float audioRight = Math.min(right, audioLeft + audioWidth);
-        return new Geometry(top, bottom, videoLeft, videoRight, audioLeft, audioRight);
+        float audioRight = Math.min(right, audioLeft + laneWidth);
+        return new Geometry(top, bottom, left, videoLeft, videoRight, audioLeft, audioRight);
     }
 
     private float timeToY(long timeMs, Geometry geometry) {
-        return geometry.top + ((geometry.bottom - geometry.top) * Math.min(Math.max(0L, timeMs), durationMs) / (float) durationMs);
+        long visibleDurationMs = visibleDurationMs();
+        long relativeMs = Math.min(Math.max(0L, timeMs - visibleStartMs), visibleDurationMs);
+        return geometry.top + ((geometry.bottom - geometry.top) * relativeMs / (float) visibleDurationMs);
     }
 
     private long yToTime(float y, Geometry geometry) {
         float height = Math.max(1f, geometry.bottom - geometry.top);
-        return clamp(Math.round(((y - geometry.top) / height) * durationMs), 0L, durationMs);
+        long visibleDurationMs = visibleDurationMs();
+        return clamp(visibleStartMs + Math.round(((y - geometry.top) / height) * visibleDurationMs), 0L, durationMs);
     }
 
     private long yDeltaToMs(float deltaY, Geometry geometry) {
         float height = Math.max(1f, geometry.bottom - geometry.top);
-        return Math.round((deltaY / height) * durationMs);
+        return Math.round((deltaY / height) * visibleDurationMs());
+    }
+
+    private static String effectLabel(String type) {
+        if (VideoSoundEffect.TYPE_HIGH_BEEP.equals(type)) {
+            return "HIGH";
+        }
+        if (VideoSoundEffect.TYPE_LOW_BEEP.equals(type)) {
+            return "LOW";
+        }
+        return "BIP";
+    }
+
+    private static String formatTimelineTime(long timeMs) {
+        long totalSeconds = Math.max(0L, timeMs / 1000L);
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        return String.format(Locale.US, "%d:%02d", minutes, seconds);
     }
 
     private long clamp(long value, long min, long max) {
@@ -412,14 +509,16 @@ public final class SoundTimelineView extends View {
     private static final class Geometry {
         final float top;
         final float bottom;
+        final float timeLabelLeft;
         final float videoLeft;
         final float videoRight;
         final float audioLeft;
         final float audioRight;
 
-        Geometry(float top, float bottom, float videoLeft, float videoRight, float audioLeft, float audioRight) {
+        Geometry(float top, float bottom, float timeLabelLeft, float videoLeft, float videoRight, float audioLeft, float audioRight) {
             this.top = top;
             this.bottom = bottom;
+            this.timeLabelLeft = timeLabelLeft;
             this.videoLeft = videoLeft;
             this.videoRight = videoRight;
             this.audioLeft = audioLeft;

@@ -4,6 +4,8 @@ import java.util.Locale;
 
 public final class VideoSoundEffect {
     public static final String TYPE_CENSOR_BEEP = "censor_beep";
+    public static final String TYPE_HIGH_BEEP = "high_beep";
+    public static final String TYPE_LOW_BEEP = "low_beep";
     public static final long MIN_DURATION_MS = 120L;
     public static final long DEFAULT_DURATION_MS = 700L;
 
