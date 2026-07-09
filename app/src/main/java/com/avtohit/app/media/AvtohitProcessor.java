@@ -1313,7 +1313,19 @@ public final class AvtohitProcessor {
                 .append(baseInputIndex)
                 .append(":a:0]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=0:")
                 .append(formatSeconds(durationMs))
-                .append("[base];");
+                .append("[base0];");
+        for (int i = 0; i < soundEffects.size(); i++) {
+            VideoSoundEffect effect = soundEffects.get(i);
+            filter.append("[base")
+                    .append(i)
+                    .append("]volume=volume=0:enable='between(t,")
+                    .append(formatSeconds(effect.startMs))
+                    .append(',')
+                    .append(formatSeconds(effect.endMs()))
+                    .append(")'[base")
+                    .append(i + 1)
+                    .append("];");
+        }
         for (int i = 0; i < soundEffects.size(); i++) {
             VideoSoundEffect effect = soundEffects.get(i);
             filter.append("sine=frequency=")
@@ -1330,13 +1342,13 @@ public final class AvtohitProcessor {
                     .append(i)
                     .append("];");
         }
-        filter.append("[base]");
+        filter.append("[base").append(soundEffects.size()).append(']');
         for (int i = 0; i < soundEffects.size(); i++) {
             filter.append("[fx").append(i).append(']');
         }
         filter.append("amix=inputs=")
                 .append(soundEffects.size() + 1)
-                .append(":duration=first:dropout_transition=0[a]");
+                .append(":duration=first:dropout_transition=0:normalize=0[a]");
 
         args.add("-filter_complex");
         args.add(filter.toString());

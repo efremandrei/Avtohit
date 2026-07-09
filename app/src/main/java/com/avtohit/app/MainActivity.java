@@ -16,8 +16,10 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
+import android.media.ToneGenerator;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -1023,6 +1025,10 @@ public final class MainActivity extends Activity {
 
         final boolean[] previewReady = new boolean[]{false};
         final boolean[] playbackActive = new boolean[]{false};
+        final MediaPlayer[] videoPreviewPlayer = new MediaPlayer[1];
+        final ToneGenerator[] effectTone = new ToneGenerator[1];
+        final boolean[] effectMuted = new boolean[]{false};
+        final String[] activeEffectKey = new String[1];
         final Runnable[] playbackTicker = new Runnable[1];
         playbackTicker[0] = new Runnable() {
             @Override
@@ -1032,18 +1038,30 @@ public final class MainActivity extends Activity {
                 }
                 long currentPositionMs = Math.max(0, preview.getCurrentPosition());
                 timeline.setPlayheadMs(currentPositionMs);
-                mainHandler.postDelayed(this, 120L);
+                updateVideoSoundEffectPreview(
+                        timeline,
+                        videoPreviewPlayer[0],
+                        effectTone,
+                        effectMuted,
+                        activeEffectKey,
+                        currentPositionMs
+                );
+                mainHandler.postDelayed(this, 80L);
             }
         };
         preview.setOnPreparedListener(mediaPlayer -> {
             previewReady[0] = true;
+            videoPreviewPlayer[0] = mediaPlayer;
             mediaPlayer.setLooping(true);
+            setVideoSoundPreviewVolume(mediaPlayer, 1f);
             preview.seekTo(0);
             preview.pause();
             previewHint.setVisibility(View.GONE);
         });
         preview.setOnErrorListener((mediaPlayer, what, extra) -> {
             previewReady[0] = false;
+            videoPreviewPlayer[0] = null;
+            stopVideoSoundEffectPreview(mediaPlayer, effectTone, effectMuted, activeEffectKey);
             previewHint.setVisibility(View.VISIBLE);
             return true;
         });
@@ -1052,6 +1070,7 @@ public final class MainActivity extends Activity {
                 playbackActive[0] = false;
                 preview.pause();
                 timeline.setPlaybackActive(false);
+                stopVideoSoundEffectPreview(videoPreviewPlayer[0], effectTone, effectMuted, activeEffectKey);
                 playPauseButton.setImageResource(R.drawable.ic_play_arrow);
                 playPauseButton.setContentDescription(getString(R.string.video_sound_play));
                 mainHandler.removeCallbacks(playbackTicker[0]);
@@ -1090,10 +1109,112 @@ public final class MainActivity extends Activity {
             playbackActive[0] = false;
             timeline.setPlaybackActive(false);
             mainHandler.removeCallbacks(playbackTicker[0]);
+            releaseVideoSoundEffectPreview(videoPreviewPlayer[0], effectTone, effectMuted, activeEffectKey);
             preview.stopPlayback();
         });
         backButton.setOnClickListener(view -> dialog.dismiss());
         dialog.show();
+    }
+
+    private void updateVideoSoundEffectPreview(
+            SoundTimelineView timeline,
+            MediaPlayer mediaPlayer,
+            ToneGenerator[] toneGeneratorRef,
+            boolean[] audioMuted,
+            String[] activeEffectKey,
+            long currentPositionMs
+    ) {
+        VideoSoundEffect activeEffect = activeSoundEffectAt(timeline.effectsCopy(), currentPositionMs);
+        if (activeEffect == null) {
+            stopVideoSoundEffectPreview(mediaPlayer, toneGeneratorRef, audioMuted, activeEffectKey);
+            return;
+        }
+
+        if (mediaPlayer != null && !audioMuted[0]) {
+            setVideoSoundPreviewVolume(mediaPlayer, 0f);
+            audioMuted[0] = true;
+        }
+
+        String effectKey = activeEffectKey(activeEffect);
+        if (effectKey.equals(activeEffectKey[0])) {
+            return;
+        }
+
+        ToneGenerator toneGenerator = toneGeneratorRef[0];
+        try {
+            if (toneGenerator == null) {
+                toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
+                toneGeneratorRef[0] = toneGenerator;
+            } else {
+                toneGenerator.stopTone();
+            }
+            long remainingMs = Math.max(1L, activeEffect.endMs() - currentPositionMs);
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, (int) Math.min(Integer.MAX_VALUE, remainingMs));
+            activeEffectKey[0] = effectKey;
+        } catch (RuntimeException ignored) {
+            activeEffectKey[0] = null;
+        }
+    }
+
+    private void stopVideoSoundEffectPreview(
+            MediaPlayer mediaPlayer,
+            ToneGenerator[] toneGeneratorRef,
+            boolean[] audioMuted,
+            String[] activeEffectKey
+    ) {
+        if (audioMuted[0] && mediaPlayer != null) {
+            setVideoSoundPreviewVolume(mediaPlayer, 1f);
+        }
+        audioMuted[0] = false;
+        activeEffectKey[0] = null;
+        if (toneGeneratorRef[0] != null) {
+            try {
+                toneGeneratorRef[0].stopTone();
+            } catch (RuntimeException ignored) {
+                // Ignore best-effort tone cleanup failures.
+            }
+        }
+    }
+
+    private void releaseVideoSoundEffectPreview(
+            MediaPlayer mediaPlayer,
+            ToneGenerator[] toneGeneratorRef,
+            boolean[] audioMuted,
+            String[] activeEffectKey
+    ) {
+        stopVideoSoundEffectPreview(mediaPlayer, toneGeneratorRef, audioMuted, activeEffectKey);
+        if (toneGeneratorRef[0] != null) {
+            try {
+                toneGeneratorRef[0].release();
+            } catch (RuntimeException ignored) {
+                // Ignore best-effort tone release failures.
+            }
+            toneGeneratorRef[0] = null;
+        }
+    }
+
+    private static void setVideoSoundPreviewVolume(MediaPlayer mediaPlayer, float volume) {
+        try {
+            mediaPlayer.setVolume(volume, volume);
+        } catch (RuntimeException ignored) {
+            // Ignore transient preview player state changes.
+        }
+    }
+
+    private static VideoSoundEffect activeSoundEffectAt(List<VideoSoundEffect> effects, long positionMs) {
+        if (effects == null || effects.isEmpty()) {
+            return null;
+        }
+        for (VideoSoundEffect effect : effects) {
+            if (effect != null && positionMs >= effect.startMs && positionMs < effect.endMs()) {
+                return effect;
+            }
+        }
+        return null;
+    }
+
+    private static String activeEffectKey(VideoSoundEffect effect) {
+        return effect.type + ":" + effect.startMs + ":" + effect.durationMs;
     }
 
     private void bindCollapsibleGroup(Button header, View content, int expandedTextResId, int collapsedTextResId, boolean initiallyExpanded) {
