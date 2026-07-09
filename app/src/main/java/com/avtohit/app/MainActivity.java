@@ -822,7 +822,6 @@ public final class MainActivity extends Activity {
             ImageButton removeButton = row.findViewById(R.id.visualOrderRemove);
 
             orderBadge.setText(String.valueOf(i + 1));
-            typeIcon.setImageResource(item.video ? R.drawable.ic_film : R.drawable.ic_image);
             nameText.setText(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
             metaText.setText(item.video
                     ? item.durationMs > 0L
@@ -835,6 +834,7 @@ public final class MainActivity extends Activity {
             removeButton.setEnabled(items.size() > 1);
 
             styleVisualOrderRow(row);
+            bindVisualOrderThumbnail(typeIcon, item);
             dragHandle.setOnLongClickListener(view -> {
                 ClipData data = ClipData.newPlainText("visual-order", firstNonBlank(item.displayName, "media"));
                 boolean started = row.startDragAndDrop(data, new View.DragShadowBuilder(row), item, 0);
@@ -1927,6 +1927,51 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void bindVisualOrderThumbnail(ImageView thumbnailView, VisualOrderItem item) {
+        Bitmap thumbnail = loadVisualOrderThumbnail(item);
+        if (thumbnail != null) {
+            thumbnailView.setPadding(0, 0, 0, 0);
+            thumbnailView.clearColorFilter();
+            thumbnailView.setImageBitmap(thumbnail);
+            return;
+        }
+
+        thumbnailView.setPadding(dp(10), dp(10), dp(10), dp(10));
+        thumbnailView.setImageResource(item.video ? R.drawable.ic_film : R.drawable.ic_image);
+        thumbnailView.setColorFilter(readyColor());
+    }
+
+    private Bitmap loadVisualOrderThumbnail(VisualOrderItem item) {
+        if (item == null || item.uri == null) {
+            return null;
+        }
+        int targetSize = dp(96);
+        if (item.video) {
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            try {
+                retriever.setDataSource(this, item.uri);
+                if (android.os.Build.VERSION.SDK_INT >= 27) {
+                    return retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, targetSize, targetSize);
+                }
+                return retriever.getFrameAtTime(0L);
+            } catch (RuntimeException | OutOfMemoryError ignored) {
+                return null;
+            } finally {
+                try {
+                    retriever.release();
+                } catch (IOException ignored) {
+                    // Ignore cleanup failures for thumbnail extraction.
+                }
+            }
+        }
+
+        try {
+            return decodeSampledImage(item.uri, targetSize, targetSize);
+        } catch (IOException | OutOfMemoryError ignored) {
+            return null;
+        }
+    }
+
     private long readDuration(Uri uri) {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
@@ -2505,7 +2550,7 @@ public final class MainActivity extends Activity {
         iconBackground.setColor(currentSkin == AppSkin.DARK ? 0xFF24302B : 0xFFDCEDE7);
         iconBackground.setCornerRadius(dp(12));
         icon.setBackground(iconBackground);
-        icon.setColorFilter(readyColor());
+        icon.clearColorFilter();
     }
 
     private void styleVisualOrderIconButton(ImageButton button, int iconColor) {

@@ -17,15 +17,15 @@
         android:layout_weight="1"
         android:fillViewport="true">
 
-        <LinearLayout
-            android:id="@+id/rootContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/avtohit_background"
-            android:orientation="vertical"
-            android:paddingLeft="16dp"
-            android:paddingRight="16dp"
-            android:paddingBottom="16dp">
+            <LinearLayout
+                android:id="@+id/rootContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/avtohit_background"
+                android:orientation="vertical"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingBottom="16dp">
 
             <ImageView
                 android:id="@+id/headerBanner"
@@ -131,7 +131,7 @@
                 android:background="@drawable/bg_surface_card"
                 android:elevation="2dp"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="10dp">
 
                 <TextView
                     android:id="@+id/mediaListTitle"
@@ -150,7 +150,8 @@
                     android:lineSpacingExtra="3dp"
                     android:text="@string/media_list_hint"
                     android:textColor="@color/avtohit_muted"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/mediaListEmptyState"
