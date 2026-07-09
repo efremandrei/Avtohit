@@ -25,6 +25,7 @@ import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.text.method.LinkMovementMethod;
+import android.view.DragEvent;
 import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -170,6 +171,26 @@ public final class MainActivity extends Activity {
             this.modifiedEpochMs = modifiedEpochMs;
             this.durationMs = durationMs;
             this.originalIndex = originalIndex;
+        }
+    }
+
+    private static final class VisualOrderItem {
+        final Uri uri;
+        final String displayName;
+        final boolean video;
+        final long modifiedEpochMs;
+        final long durationMs;
+
+        VisualOrderItem(Uri uri, String displayName, boolean video, long modifiedEpochMs, long durationMs) {
+            this.uri = uri;
+            this.displayName = displayName;
+            this.video = video;
+            this.modifiedEpochMs = modifiedEpochMs;
+            this.durationMs = durationMs;
+        }
+
+        VisualOrderItem duplicate() {
+            return new VisualOrderItem(uri, displayName, video, modifiedEpochMs, durationMs);
         }
     }
 
@@ -407,7 +428,13 @@ public final class MainActivity extends Activity {
         selectVisualButton.setOnClickListener(view -> openVisualPicker());
         selectAudioButton.setOnClickListener(view -> openAudioPicker());
         exportButton.setOnClickListener(view -> showExportDialog(true));
-        visualSummaryRow.setOnClickListener(view -> openVisualPicker());
+        visualSummaryRow.setOnClickListener(view -> {
+            if (visualUri != null) {
+                showVisualOrderDialog();
+            } else {
+                openVisualPicker();
+            }
+        });
         audioSummaryRow.setOnClickListener(view -> openAudioPicker());
         exportSummaryRow.setOnClickListener(view -> showExportDialog(true));
         playButton.setOnClickListener(view -> togglePreviewPlayback());
@@ -641,6 +668,7 @@ public final class MainActivity extends Activity {
         visualIsVideo = false;
         visualDurationMs = 0L;
         status.setText(R.string.ready);
+        mainHandler.post(this::showVisualOrderDialog);
     }
 
     private void handleVideoSequenceSelection(List<VideoSelection> videoSelections) {
@@ -663,6 +691,7 @@ public final class MainActivity extends Activity {
         visualIsVideo = true;
         visualDurationMs = totalDurationMs;
         status.setText(R.string.ready);
+        mainHandler.post(this::showVisualOrderDialog);
     }
 
     private void handleSingleVisualSelection(Uri uri) {
@@ -694,6 +723,232 @@ public final class MainActivity extends Activity {
             visualVideoDurations.add(visualDurationMs);
         }
         status.setText(R.string.ready);
+    }
+
+    private void showVisualOrderDialog() {
+        ArrayList<VisualOrderItem> workingItems = currentVisualOrderItems();
+        if (workingItems.isEmpty()) {
+            openVisualPicker();
+            return;
+        }
+
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_visual_order, null);
+        LinearLayout listContainer = dialogView.findViewById(R.id.visualOrderList);
+        renderVisualOrderRows(listContainer, workingItems);
+
+        TextView dialogTitle = buildDialogTitle(R.string.visual_order_title);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setCustomTitle(dialogTitle)
+                .setView(dialogView)
+                .setNegativeButton(R.string.export_cancel, null)
+                .setNeutralButton(R.string.visual_order_select_new, (dialogInterface, which) -> openVisualPicker())
+                .setPositiveButton(R.string.export_apply, (dialogInterface, which) -> {
+                    applyVisualOrderItems(workingItems);
+                    refreshUi();
+                })
+                .create();
+        dialog.setOnShowListener(unused -> styleVisualOrderDialog(dialog, dialogTitle, dialogView));
+        dialog.show();
+    }
+
+    private ArrayList<VisualOrderItem> currentVisualOrderItems() {
+        ArrayList<VisualOrderItem> items = new ArrayList<>();
+        if (visualUri == null) {
+            return items;
+        }
+
+        if (visualIsVideo) {
+            if (visualVideoUris.isEmpty()) {
+                items.add(new VisualOrderItem(
+                        visualUri,
+                        visualDisplayName,
+                        true,
+                        readModifiedEpochMs(visualUri),
+                        visualDurationMs
+                ));
+                return items;
+            }
+            for (int i = 0; i < visualVideoUris.size(); i++) {
+                items.add(new VisualOrderItem(
+                        visualVideoUris.get(i),
+                        valueAt(visualVideoNames, i, getString(R.string.visual_track_default)),
+                        true,
+                        longAt(visualVideoEpochs, i, 0L),
+                        longAt(visualVideoDurations, i, 0L)
+                ));
+            }
+            return items;
+        }
+
+        if (visualImageUris.isEmpty()) {
+            items.add(new VisualOrderItem(visualUri, visualDisplayName, false, 0L, 0L));
+            return items;
+        }
+        for (int i = 0; i < visualImageUris.size(); i++) {
+            items.add(new VisualOrderItem(
+                    visualImageUris.get(i),
+                    valueAt(visualImageNames, i, getString(R.string.visual_track_default)),
+                    false,
+                    0L,
+                    0L
+            ));
+        }
+        return items;
+    }
+
+    private void renderVisualOrderRows(LinearLayout listContainer, ArrayList<VisualOrderItem> items) {
+        listContainer.removeAllViews();
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (int i = 0; i < items.size(); i++) {
+            VisualOrderItem item = items.get(i);
+            View row = inflater.inflate(R.layout.row_visual_order_item, listContainer, false);
+            TextView orderBadge = row.findViewById(R.id.visualOrderNumber);
+            ImageView typeIcon = row.findViewById(R.id.visualOrderTypeIcon);
+            TextView nameText = row.findViewById(R.id.visualOrderName);
+            TextView metaText = row.findViewById(R.id.visualOrderMeta);
+            ImageButton dragHandle = row.findViewById(R.id.visualOrderDragHandle);
+            ImageButton duplicateButton = row.findViewById(R.id.visualOrderDuplicate);
+            ImageButton removeButton = row.findViewById(R.id.visualOrderRemove);
+
+            orderBadge.setText(String.valueOf(i + 1));
+            typeIcon.setImageResource(item.video ? R.drawable.ic_film : R.drawable.ic_image);
+            nameText.setText(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
+            metaText.setText(item.video
+                    ? item.durationMs > 0L
+                    ? getString(R.string.visual_order_video_meta, formatDuration(item.durationMs))
+                    : getString(R.string.visual_order_video_meta_unknown)
+                    : getString(R.string.visual_order_image_meta));
+            dragHandle.setContentDescription(getString(R.string.visual_order_drag_item, i + 1));
+            duplicateButton.setContentDescription(getString(R.string.visual_order_duplicate_item, i + 1));
+            removeButton.setContentDescription(getString(R.string.visual_order_remove_item, i + 1));
+            removeButton.setEnabled(items.size() > 1);
+
+            styleVisualOrderRow(row);
+            dragHandle.setOnLongClickListener(view -> {
+                ClipData data = ClipData.newPlainText("visual-order", firstNonBlank(item.displayName, "media"));
+                boolean started = row.startDragAndDrop(data, new View.DragShadowBuilder(row), item, 0);
+                row.setAlpha(started ? 0.45f : 1f);
+                return started;
+            });
+            row.setOnDragListener((view, event) -> handleVisualOrderRowDrag(event, listContainer, items, item, row));
+            duplicateButton.setOnClickListener(view -> {
+                int index = items.indexOf(item);
+                items.add(index >= 0 ? index + 1 : items.size(), item.duplicate());
+                renderVisualOrderRows(listContainer, items);
+            });
+            removeButton.setOnClickListener(view -> {
+                if (items.size() <= 1) {
+                    return;
+                }
+                items.remove(item);
+                renderVisualOrderRows(listContainer, items);
+            });
+
+            listContainer.addView(row);
+        }
+    }
+
+    private boolean handleVisualOrderRowDrag(
+            DragEvent event,
+            LinearLayout listContainer,
+            ArrayList<VisualOrderItem> items,
+            VisualOrderItem targetItem,
+            View row
+    ) {
+        if (!(event.getLocalState() instanceof VisualOrderItem)) {
+            return false;
+        }
+        switch (event.getAction()) {
+            case DragEvent.ACTION_DRAG_STARTED:
+                return true;
+            case DragEvent.ACTION_DRAG_ENTERED:
+                row.setAlpha(0.72f);
+                return true;
+            case DragEvent.ACTION_DRAG_EXITED:
+                row.setAlpha(1f);
+                return true;
+            case DragEvent.ACTION_DROP:
+                int targetIndex = items.indexOf(targetItem);
+                if (event.getY() > row.getHeight() / 2f) {
+                    targetIndex++;
+                }
+                moveVisualOrderItemToIndex(items, (VisualOrderItem) event.getLocalState(), targetIndex);
+                renderVisualOrderRows(listContainer, items);
+                return true;
+            case DragEvent.ACTION_DRAG_ENDED:
+                row.setAlpha(1f);
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private void moveVisualOrderItemToIndex(ArrayList<VisualOrderItem> items, VisualOrderItem draggedItem, int targetIndex) {
+        int from = items.indexOf(draggedItem);
+        if (from < 0) {
+            return;
+        }
+        targetIndex = Math.max(0, Math.min(targetIndex, items.size()));
+        if (from < targetIndex) {
+            targetIndex--;
+        }
+        if (from == targetIndex) {
+            return;
+        }
+        items.remove(from);
+        items.add(Math.max(0, Math.min(targetIndex, items.size())), draggedItem);
+    }
+
+    private void applyVisualOrderItems(List<VisualOrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        boolean video = items.get(0).video;
+        for (VisualOrderItem item : items) {
+            if (item.video != video) {
+                status.setText(R.string.visual_multi_media_type_mix);
+                return;
+            }
+        }
+
+        boolean removedAudioForVideoSequence = video && items.size() > 1 && audioUri != null;
+        if (removedAudioForVideoSequence) {
+            clearAudioSelection();
+        }
+        clearVisualSelection();
+        if (video) {
+            long totalDurationMs = 0L;
+            for (VisualOrderItem item : items) {
+                visualVideoUris.add(item.uri);
+                visualVideoNames.add(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
+                visualVideoEpochs.add(item.modifiedEpochMs);
+                visualVideoDurations.add(item.durationMs);
+                totalDurationMs += Math.max(0L, item.durationMs);
+            }
+            VisualOrderItem firstItem = items.get(0);
+            visualUri = firstItem.uri;
+            visualMimeType = getContentResolver().getType(firstItem.uri);
+            visualDisplayName = items.size() > 1
+                    ? getString(R.string.visual_video_count, items.size())
+                    : firstNonBlank(firstItem.displayName, getString(R.string.visual_track_default));
+            visualIsVideo = true;
+            visualDurationMs = totalDurationMs;
+        } else {
+            for (VisualOrderItem item : items) {
+                visualImageUris.add(item.uri);
+                visualImageNames.add(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
+            }
+            VisualOrderItem firstItem = items.get(0);
+            visualUri = firstItem.uri;
+            visualMimeType = getContentResolver().getType(firstItem.uri);
+            visualDisplayName = items.size() > 1
+                    ? getString(R.string.visual_image_count, items.size())
+                    : firstNonBlank(firstItem.displayName, getString(R.string.visual_track_default));
+            visualIsVideo = false;
+            visualDurationMs = 0L;
+        }
+        status.setText(removedAudioForVideoSequence ? R.string.visual_order_audio_removed : R.string.visual_order_updated);
     }
 
     private void clearAudioSelection() {
@@ -1874,6 +2129,21 @@ public final class MainActivity extends Activity {
         return output;
     }
 
+    private static String valueAt(List<String> values, int index, String fallback) {
+        if (values == null || index < 0 || index >= values.size()) {
+            return fallback;
+        }
+        return firstNonBlank(values.get(index), fallback);
+    }
+
+    private static long longAt(List<Long> values, int index, long fallback) {
+        if (values == null || index < 0 || index >= values.size()) {
+            return fallback;
+        }
+        Long value = values.get(index);
+        return value != null ? value : fallback;
+    }
+
     private String defaultOutputName() {
         if (audioDisplayName != null && !audioDisplayName.trim().isEmpty()) {
             return stripExtension(audioDisplayName) + ".mp4";
@@ -2121,6 +2391,66 @@ public final class MainActivity extends Activity {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void styleVisualOrderDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
+        int[] palette = dialogPalette();
+        int surfaceColor = palette[0];
+        int textColor = palette[2];
+        styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.visualOrderDialogContent), textColor, surfaceColor);
+        LinearLayout listContainer = dialogView.findViewById(R.id.visualOrderList);
+        for (int i = 0; i < listContainer.getChildCount(); i++) {
+            styleVisualOrderRow(listContainer.getChildAt(i));
+        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+    }
+
+    private void styleVisualOrderRow(View row) {
+        int[] palette = dialogPalette();
+        int summaryColor = palette[1];
+        int textColor = palette[2];
+        int borderColor = palette[3];
+        GradientDrawable rowDrawable = new GradientDrawable();
+        rowDrawable.setColor(summaryColor);
+        rowDrawable.setCornerRadius(dp(16));
+        rowDrawable.setStroke(dp(1), borderColor);
+        row.setBackground(rowDrawable);
+
+        TextView orderBadge = row.findViewById(R.id.visualOrderNumber);
+        TextView nameText = row.findViewById(R.id.visualOrderName);
+        TextView metaText = row.findViewById(R.id.visualOrderMeta);
+        ImageView typeIcon = row.findViewById(R.id.visualOrderTypeIcon);
+        ImageButton dragHandle = row.findViewById(R.id.visualOrderDragHandle);
+        ImageButton duplicateButton = row.findViewById(R.id.visualOrderDuplicate);
+        ImageButton removeButton = row.findViewById(R.id.visualOrderRemove);
+
+        orderBadge.setTextColor(textColor);
+        nameText.setTextColor(textColor);
+        metaText.setTextColor(currentSkin == AppSkin.DARK ? currentSkin.mutedColor : 0xFF5D6662);
+        styleVisualOrderTypeIcon(typeIcon);
+        styleVisualOrderIconButton(dragHandle, currentSkin.mutedColor);
+        styleVisualOrderIconButton(duplicateButton, readyColor());
+        styleVisualOrderIconButton(removeButton, neededColor());
+    }
+
+    private void styleVisualOrderTypeIcon(ImageView icon) {
+        GradientDrawable iconBackground = new GradientDrawable();
+        iconBackground.setColor(currentSkin == AppSkin.DARK ? 0xFF24302B : 0xFFDCEDE7);
+        iconBackground.setCornerRadius(dp(12));
+        icon.setBackground(iconBackground);
+        icon.setColorFilter(readyColor());
+    }
+
+    private void styleVisualOrderIconButton(ImageButton button, int iconColor) {
+        GradientDrawable buttonBackground = new GradientDrawable();
+        buttonBackground.setColor(currentSkin == AppSkin.DARK ? currentSkin.surfaceColor : Color.WHITE);
+        buttonBackground.setCornerRadius(dp(12));
+        buttonBackground.setStroke(dp(1), currentSkin.borderColor);
+        button.setBackground(buttonBackground);
+        button.setColorFilter(iconColor);
+        button.setAlpha(button.isEnabled() ? 1f : 0.35f);
     }
 
     private void styleInfoDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {

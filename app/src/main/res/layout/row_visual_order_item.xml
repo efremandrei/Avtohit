@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/visualOrderRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:gravity="center_vertical"
+    android:minHeight="72dp"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingTop="10dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="10dp">
+
+    <ImageButton
+        android:id="@+id/visualOrderDragHandle"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:background="@drawable/bg_icon_button"
+        android:contentDescription="@string/visual_order_drag"
+        android:padding="10dp"
+        android:scaleType="center"
+        android:src="@drawable/ic_drag_handle"
+        android:tint="@color/avtohit_muted" />
+
+    <TextView
+        android:id="@+id/visualOrderNumber"
+        android:layout_width="28dp"
+        android:layout_height="42dp"
+        android:gravity="center"
+        android:textColor="@color/avtohit_text"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <ImageView
+        android:id="@+id/visualOrderTypeIcon"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:contentDescription="@string/visual_order_media_type"
+        android:padding="9dp"
+        android:scaleType="centerInside"
+        android:tint="@color/avtohit_primary" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="8dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/visualOrderName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textColor="@color/avtohit_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/visualOrderMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/avtohit_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/visualOrderDuplicate"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginEnd="6dp"
+        android:background="@drawable/bg_icon_button"
+        android:contentDescription="@string/visual_order_duplicate"
+        android:padding="10dp"
+        android:scaleType="center"
+        android:src="@drawable/ic_duplicate"
+        android:tint="@color/avtohit_positive" />
+
+    <ImageButton
+        android:id="@+id/visualOrderRemove"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:background="@drawable/bg_icon_button"
+        android:contentDescription="@string/visual_order_remove"
+        android:padding="10dp"
+        android:scaleType="center"
+        android:src="@drawable/ic_trash"
+        android:tint="@color/avtohit_negative" />
+</LinearLayout>
