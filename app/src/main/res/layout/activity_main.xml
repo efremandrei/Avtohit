@@ -30,8 +30,8 @@
             <ImageView
                 android:id="@+id/headerBanner"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:adjustViewBounds="true"
+                android:layout_height="108dp"
+                android:adjustViewBounds="false"
                 android:contentDescription="@string/app_name"
                 android:scaleType="fitCenter"
                 android:src="@drawable/avtohit_header_banner" />
