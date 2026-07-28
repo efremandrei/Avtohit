@@ -2007,8 +2007,7 @@ public final class MainActivity extends Activity {
                 R.string.about_us_body,
                 aboutVersionSummary(),
                 getString(R.string.about_email_plain),
-                getString(R.string.about_github_plain),
-                debugLogLocation()
+                getString(R.string.about_github_plain)
         );
         showAboutInfoDialog(body);
     }
@@ -2694,15 +2693,10 @@ public final class MainActivity extends Activity {
             long versionCode = android.os.Build.VERSION.SDK_INT >= 28
                     ? packageInfo.getLongVersionCode()
                     : packageInfo.versionCode;
-            String buildLabel = isDebugBuild() ? "debug" : "release";
-            return getString(R.string.about_version_value, versionName, versionCode, buildLabel);
+            return getString(R.string.about_version_value, versionName, versionCode);
         } catch (Exception ignored) {
-            return getString(R.string.about_version_value, "unknown", 0, "unknown");
+            return getString(R.string.about_version_value, "unknown", 0);
         }
-    }
-
-    private boolean isDebugBuild() {
-        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private static String safeMessage(Throwable error) {
