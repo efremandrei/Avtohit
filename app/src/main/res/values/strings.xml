@@ -131,6 +131,7 @@
     <string name="about_github_plain">https://github.com/efremandrei/Avtohit</string>
     <string name="about_us_body">Developer: Andrei Efremushkin\nEmail: %2$s\nGitHub: %3$s\nVersion: %1$s</string>
     <string name="about_read_logs">Read Logs</string>
+    <string name="about_check_updates">Check for updates</string>
     <string name="debug_log_title">Debug Log</string>
     <string name="debug_log_empty">No debug log found yet.\nLocation: %1$s</string>
     <string name="debug_log_read_failed">Could not read the debug log: %1$s\nLocation: %2$s</string>

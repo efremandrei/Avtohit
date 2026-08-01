@@ -319,6 +319,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppUpdateChecker.checkDaily(this);
         setContentView(R.layout.activity_main);
 
         debugLogger = new AvtohitDebugLogger(this);
@@ -2023,11 +2024,13 @@ public final class MainActivity extends Activity {
                 .setCustomTitle(dialogTitle)
                 .setView(dialogView)
                 .setNeutralButton(R.string.about_read_logs, null)
+                .setNegativeButton(R.string.about_check_updates, null)
                 .setPositiveButton(R.string.info_dialog_close, null)
                 .create();
         dialog.setOnShowListener(unused -> {
             styleInfoDialog(dialog, dialogTitle, dialogView);
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> showDebugLogDialog());
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> AppUpdateChecker.checkNow(this));
         });
         dialog.show();
     }
