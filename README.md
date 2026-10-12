@@ -12,7 +12,9 @@ Command-line build, when Gradle is available:
 .\gradlew.bat :app:assembleDebug
 ```
 
-The repository also includes prebuilt debug APKs under `artifacts/`:
+Download the current versioned APK from [GitHub Releases](https://github.com/efremandrei/Avtohit/releases/latest). Choose the `arm64-v8a` variant for a modern Samsung/Android phone. APK names include the version, build number, and architecture.
+
+The repository also includes older prebuilt debug APKs under `artifacts/`:
 
 - `AVTOHIT-arm64-v8a-debug.apk`
 - `AVTOHIT-armeabi-v7a-debug.apk`

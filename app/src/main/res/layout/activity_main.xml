@@ -30,7 +30,7 @@
             <ImageView
                 android:id="@+id/headerBanner"
                 android:layout_width="match_parent"
-                android:layout_height="108dp"
+                android:layout_height="88dp"
                 android:adjustViewBounds="false"
                 android:contentDescription="@string/app_name"
                 android:scaleType="fitCenter"
@@ -46,21 +46,22 @@
             <Button
                 android:id="@+id/selectAudioButton"
                 android:layout_width="0dp"
-                android:layout_height="72dp"
+                android:layout_height="match_parent"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_selectable_action_button"
-                android:drawableStart="@drawable/ic_music_note"
-                android:drawablePadding="8dp"
+                android:drawableTop="@drawable/ic_music_note"
+                android:drawablePadding="6dp"
                 android:drawableTint="@android:color/white"
                 android:fontFamily="sans"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:minHeight="0dp"
+                android:minHeight="96dp"
                 android:minWidth="0dp"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:singleLine="true"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:text="@string/select_mp3"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
@@ -70,20 +71,21 @@
             <Button
                 android:id="@+id/selectVisualButton"
                 android:layout_width="0dp"
-                android:layout_height="72dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:background="@drawable/bg_selectable_action_button"
-                android:drawableStart="@drawable/ic_image"
-                android:drawablePadding="8dp"
+                android:drawableTop="@drawable/ic_image"
+                android:drawablePadding="6dp"
                 android:drawableTint="@android:color/white"
                 android:fontFamily="sans"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:minHeight="0dp"
+                android:minHeight="96dp"
                 android:minWidth="0dp"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:singleLine="true"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:text="@string/select_visual"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
@@ -91,37 +93,43 @@
                 android:textStyle="normal" />
             </LinearLayout>
 
-            <FrameLayout
+            <LinearLayout
                 android:id="@+id/exportButton"
                 android:layout_width="match_parent"
-                android:layout_height="76dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:background="@drawable/bg_export_button"
                 android:clickable="true"
                 android:enabled="false"
-                android:focusable="true">
+                android:focusable="true"
+                android:contentDescription="@string/export_button"
+                android:foreground="?android:attr/selectableItemBackground"
+                android:gravity="center"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:padding="16dp">
 
                 <ImageView
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:layout_gravity="start|center_vertical"
-                    android:layout_marginStart="36dp"
-                    android:contentDescription="@string/export_button"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="16dp"
+                    android:importantForAccessibility="no"
                     android:src="@drawable/ic_film"
                     android:tint="@android:color/white" />
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
                     android:fontFamily="sans"
                     android:includeFontPadding="false"
                     android:text="@string/export_button"
                     android:textColor="@android:color/white"
                     android:textSize="25sp"
-                    android:textStyle="normal"
-                    android:translationX="20dp" />
-            </FrameLayout>
+                    android:textStyle="normal" />
+            </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/projectSummaryCard"
@@ -131,7 +139,7 @@
                 android:background="@drawable/bg_surface_card"
                 android:elevation="2dp"
                 android:orientation="vertical"
-                android:padding="10dp">
+                android:padding="8dp">
 
                 <TextView
                     android:id="@+id/mediaListTitle"
@@ -170,6 +178,20 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/loadedAudioSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:breakStrategy="simple"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:minHeight="48dp"
+                    android:padding="8dp"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -451,7 +473,7 @@
                 android:background="@drawable/bg_surface_card"
                 android:elevation="2dp"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="12dp">
 
             <TextView
                 android:id="@+id/previewTitle"
@@ -473,15 +495,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:adjustViewBounds="true"
-                    android:alpha="0.96"
                     android:contentDescription="@string/preview_title"
-                    android:scaleType="centerCrop"
+                    android:scaleType="fitCenter"
                     android:src="@drawable/ic_launcher_foreground" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_preview_overlay" />
 
                 <TextView
                     android:id="@+id/previewEmptyState"
@@ -496,48 +512,51 @@
                     android:textSize="16sp"
                     android:textStyle="bold" />
 
-                <ImageButton
-                    android:id="@+id/playButton"
-                    android:layout_width="58dp"
-                    android:layout_height="58dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/bg_play_button"
-                    android:contentDescription="@string/play_button"
-                    android:enabled="false"
-                    android:padding="14dp"
-                    android:src="@android:drawable/ic_media_play"
-                    android:tint="@android:color/white" />
+            </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="bottom"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/playButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_selectable_action_button"
+                    android:contentDescription="@string/play_button"
+                    android:enabled="false"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_play_arrow"
+                    android:tint="@android:color/white" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
                     android:orientation="vertical"
-                    android:padding="14dp">
+                    android:padding="4dp">
 
                     <TextView
                         android:id="@+id/previewModeLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:background="@drawable/bg_chip_dark"
-                        android:paddingStart="10dp"
-                        android:paddingTop="6dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="6dp"
                         android:text="@string/preview_audio_only"
-                        android:textColor="@android:color/white"
+                        android:textColor="@color/avtohit_muted"
                         android:textSize="12sp" />
 
                     <SeekBar
                         android:id="@+id/previewSeek"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_height="48dp"
                         android:enabled="false"
                         android:max="1000"
                         android:progress="0"
-                        android:thumbTint="@android:color/white"
-                        android:progressTint="@android:color/white" />
+                        android:thumbTint="@color/avtohit_positive"
+                        android:progressTint="@color/avtohit_positive" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -552,19 +571,20 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="@string/ready"
-                            android:textColor="@android:color/white"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:id="@+id/status"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/ready"
-                            android:textColor="@android:color/white"
+                            android:textColor="@color/avtohit_text"
                             android:textSize="13sp" />
                     </LinearLayout>
                 </LinearLayout>
-            </FrameLayout>
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:text="@string/ready"
+                    android:textColor="@color/avtohit_muted"
+                    android:textSize="14sp" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
@@ -576,22 +596,21 @@
         android:background="@color/avtohit_background"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
+        android:paddingStart="10dp"
         android:paddingTop="8dp"
-        android:paddingEnd="16dp"
+        android:paddingEnd="10dp"
         android:paddingBottom="12dp">
 
         <Button
             android:id="@+id/helpButton"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_tonal_button"
             android:fontFamily="sans"
             android:includeFontPadding="false"
-            android:maxLines="2"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:minWidth="0dp"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
@@ -604,18 +623,23 @@
         <Button
             android:id="@+id/skinButton"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_tonal_button"
             android:fontFamily="sans"
             android:includeFontPadding="false"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="10sp"
+            android:autoSizeMaxTextSize="12sp"
+            android:autoSizeStepGranularity="1sp"
             android:maxLines="2"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:minWidth="0dp"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
-            android:text="@string/app_skin_title"
+            android:text="@string/skin_button_label"
+            android:contentDescription="@string/app_skin_title"
             android:textAllCaps="false"
             android:textColor="@color/avtohit_text"
             android:textSize="12sp"
@@ -624,13 +648,12 @@
         <Button
             android:id="@+id/aboutButton"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
             android:background="@drawable/bg_tonal_button"
             android:fontFamily="sans"
             android:includeFontPadding="false"
-            android:maxLines="2"
-            android:minHeight="0dp"
+            android:minHeight="48dp"
             android:minWidth="0dp"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"

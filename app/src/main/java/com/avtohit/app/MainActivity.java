@@ -975,7 +975,7 @@ public final class MainActivity extends Activity {
             int[] palette = dialogPalette();
             styleDialogShell(dialog, dialogTitle, content, palette[2], palette[0]);
             styleBottomActionButton(editSoundButton);
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(neededColor());
         });
         editSoundButton.setOnClickListener(view -> {
             dialog.dismiss();
@@ -1664,6 +1664,14 @@ public final class MainActivity extends Activity {
         mediaListEmptyState.setBackground(emptyDrawable);
         mediaListEmptyState.setTextColor(currentSkin.mutedColor);
 
+        TextView audioSummary = findViewById(R.id.loadedAudioSummary);
+        audioSummary.setVisibility(audioUri != null ? View.VISIBLE : View.GONE);
+        audioSummary.setText(getString(R.string.loaded_audio_summary,
+                firstNonBlank(audioDisplayName, "MP3"), formatDuration(audioDurationMs)));
+        audioSummary.setTextColor(currentSkin.textColor);
+        audioSummary.setEnabled(!rendering);
+        audioSummary.setOnClickListener(view -> openAudioPicker());
+
         ArrayList<VisualOrderItem> items = currentVisualOrderItems();
         if (items.isEmpty()) {
             mediaInlineList.setVisibility(View.GONE);
@@ -1805,6 +1813,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshPreview() {
+        previewArtwork.setVisibility(visualUri != null ? View.VISIBLE : View.GONE);
         if (visualUri == null) {
             previewArtwork.setImageResource(R.drawable.ic_launcher_foreground);
             previewEmptyState.setVisibility(View.VISIBLE);
@@ -1843,6 +1852,7 @@ public final class MainActivity extends Activity {
         audioSummaryRow.setEnabled(!rendering);
         exportSummaryRow.setEnabled(canOpenMergeMenu);
         setViewTreeEnabled(mediaInlineList, !rendering);
+        findViewById(R.id.loadedAudioSummary).setEnabled(!rendering);
         helpButton.setEnabled(true);
         skinButton.setEnabled(true);
         aboutButton.setEnabled(true);
@@ -2000,7 +2010,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showHelpDialog() {
-        showInfoDialog(R.string.help_title, getString(R.string.help_body), false, R.drawable.help_ui_guide);
+        showInfoDialog(R.string.help_title, getString(R.string.ui_help_body), false, R.drawable.help_ui_guide);
     }
 
     private void showAboutDialog() {
@@ -2117,7 +2127,7 @@ public final class MainActivity extends Activity {
             }
             previewPlayer.start();
             previewPlaying = true;
-            playButton.setImageResource(android.R.drawable.ic_media_pause);
+            playButton.setImageResource(R.drawable.ic_pause);
             playButton.setContentDescription(getString(R.string.pause_button));
             mainHandler.removeCallbacks(previewTicker);
             mainHandler.post(previewTicker);
@@ -2136,7 +2146,7 @@ public final class MainActivity extends Activity {
             // Ignore best-effort preview cleanup failures.
         }
         previewPlaying = false;
-        playButton.setImageResource(android.R.drawable.ic_media_play);
+        playButton.setImageResource(R.drawable.ic_play_arrow);
         playButton.setContentDescription(getString(R.string.play_button));
         mainHandler.removeCallbacks(previewTicker);
     }
@@ -2816,6 +2826,11 @@ public final class MainActivity extends Activity {
         summaryDividerOne.setBackgroundColor(currentSkin.borderColor);
         summaryDividerTwo.setBackgroundColor(currentSkin.borderColor);
         previewTitle.setTextColor(currentSkin.textColor);
+        previewTime.setTextColor(currentSkin.textColor);
+        previewModeLabel.setTextColor(currentSkin.mutedColor);
+        status.setTextColor(currentSkin.mutedColor);
+        previewSeek.setProgressTintList(ColorStateList.valueOf(readyColor()));
+        previewSeek.setThumbTintList(ColorStateList.valueOf(readyColor()));
         refreshMediaInlineList();
 
         updateSystemBars();
@@ -2842,7 +2857,7 @@ public final class MainActivity extends Activity {
     private void styleCard(View view, int fillColor) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(fillColor);
-        drawable.setCornerRadius(dp(22));
+        drawable.setCornerRadius(dp(8));
         drawable.setStroke(dp(1), currentSkin.borderColor);
         view.setBackground(drawable);
     }
@@ -2853,9 +2868,11 @@ public final class MainActivity extends Activity {
         }
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(currentSkin.surfaceColor);
-        drawable.setCornerRadius(dp(16));
+        drawable.setCornerRadius(dp(8));
         drawable.setStroke(dp(1), currentSkin.borderColor);
-        button.setBackground(drawable);
+        button.setBackground(new android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(currentSkin == AppSkin.DARK ? 0x33FFFFFF : 0x22000000),
+                drawable, null));
         button.setTextColor(currentSkin.textColor);
         button.setAlpha(button.isEnabled() ? 1f : 0.55f);
     }
@@ -2906,9 +2923,9 @@ public final class MainActivity extends Activity {
         summaryDrawable.setStroke(dp(1), borderColor);
         exportSummary.setBackground(summaryDrawable);
 
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(readyColor());
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(neededColor());
     }
 
     private void styleVisualOrderDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
@@ -2920,9 +2937,9 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < listContainer.getChildCount(); i++) {
             styleVisualOrderRow(listContainer.getChildAt(i));
         }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(readyColor());
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(textColor);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(neededColor());
     }
 
     private void styleVideoSoundEditorDialog(AlertDialog dialog, TextView dialogTitle, View dialogView, SoundTimelineView timeline) {
@@ -2944,7 +2961,8 @@ public final class MainActivity extends Activity {
         TextView previewHint = dialogView.findViewById(R.id.videoSoundPreviewHint);
         View previewFrame = dialogView.findViewById(R.id.videoSoundPreviewFrame);
         styleDialogIconButton(backButton, textColor, surfaceColor, borderColor);
-        styleDialogIconButton(playPauseButton, Color.WHITE, readyColor(), readyColor());
+        styleDialogIconButton(playPauseButton, Color.WHITE,
+                getColor(R.color.avtohit_positive), getColor(R.color.avtohit_positive));
         if (previewHint != null) {
             previewHint.setTextColor(Color.WHITE);
         }
@@ -2963,8 +2981,8 @@ public final class MainActivity extends Activity {
         stylePrimaryDialogButton(dialogView.findViewById(R.id.addHighBeepButton));
         stylePrimaryDialogButton(dialogView.findViewById(R.id.addLowBeepButton));
         styleNegativeDialogButton(dialogView.findViewById(R.id.deleteSoundEffectButton));
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(0xFFC62828);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(readyColor());
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(neededColor());
     }
 
     private void styleDialogIconButton(ImageButton button, int iconColor, int fillColor, int borderColor) {
@@ -2985,7 +3003,7 @@ public final class MainActivity extends Activity {
             return;
         }
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(readyColor());
+        drawable.setColor(getColor(R.color.avtohit_positive));
         drawable.setCornerRadius(dp(16));
         button.setBackground(drawable);
         button.setTextColor(Color.WHITE);
@@ -2997,7 +3015,7 @@ public final class MainActivity extends Activity {
             return;
         }
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(neededColor());
+        drawable.setColor(getColor(R.color.avtohit_negative));
         drawable.setCornerRadius(dp(16));
         button.setBackground(drawable);
         button.setTextColor(Color.WHITE);
@@ -3011,7 +3029,7 @@ public final class MainActivity extends Activity {
         int borderColor = palette[3];
         GradientDrawable rowDrawable = new GradientDrawable();
         rowDrawable.setColor(summaryColor);
-        rowDrawable.setCornerRadius(dp(16));
+        rowDrawable.setCornerRadius(dp(8));
         rowDrawable.setStroke(dp(1), borderColor);
         row.setBackground(rowDrawable);
 
@@ -3037,6 +3055,7 @@ public final class MainActivity extends Activity {
         iconBackground.setColor(currentSkin == AppSkin.DARK ? 0xFF24302B : 0xFFDCEDE7);
         iconBackground.setCornerRadius(dp(12));
         icon.setBackground(iconBackground);
+        icon.setClipToOutline(true);
         icon.clearColorFilter();
     }
 
@@ -3045,9 +3064,15 @@ public final class MainActivity extends Activity {
         buttonBackground.setColor(currentSkin == AppSkin.DARK ? currentSkin.surfaceColor : Color.WHITE);
         buttonBackground.setCornerRadius(dp(12));
         buttonBackground.setStroke(dp(1), currentSkin.borderColor);
-        button.setBackground(buttonBackground);
+        // Preserve pressed-state feedback when applying the selected skin.
+        button.setBackground(new android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(currentSkin == AppSkin.DARK ? 0x33FFFFFF : 0x22000000),
+                buttonBackground, null));
         button.setColorFilter(iconColor);
         button.setAlpha(button.isEnabled() ? 1f : 0.35f);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            button.setTooltipText(button.getContentDescription());
+        }
     }
 
     private void styleInfoDialog(AlertDialog dialog, TextView dialogTitle, View dialogView) {
@@ -3055,7 +3080,7 @@ public final class MainActivity extends Activity {
         int surfaceColor = palette[0];
         int textColor = palette[2];
         styleDialogShell(dialog, dialogTitle, dialogView.findViewById(R.id.infoDialogContent), textColor, surfaceColor);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(0xFF2E7D32);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(readyColor());
         Button neutralButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
         if (neutralButton != null) {
             neutralButton.setTextColor(textColor);
@@ -3099,7 +3124,8 @@ public final class MainActivity extends Activity {
             TextView textView = (TextView) root;
             textView.setTextColor(textColor);
             if (root instanceof android.widget.RadioButton) {
-                ((android.widget.RadioButton) root).setButtonTintList(ColorStateList.valueOf(0xFF2E7D32));
+                ((android.widget.RadioButton) root).setButtonTintList(ColorStateList.valueOf(readyColor()));
+                textView.setCompoundDrawableTintList(ColorStateList.valueOf(readyColor()));
             }
         }
         if (root instanceof android.view.ViewGroup) {

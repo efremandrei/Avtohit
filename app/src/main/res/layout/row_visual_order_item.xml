@@ -18,8 +18,8 @@
 
         <ImageButton
             android:id="@+id/visualOrderDragHandle"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/bg_icon_button"
             android:contentDescription="@string/visual_order_drag"
             android:padding="9dp"
@@ -30,7 +30,7 @@
         <TextView
             android:id="@+id/visualOrderNumber"
             android:layout_width="24dp"
-            android:layout_height="38dp"
+            android:layout_height="48dp"
             android:layout_marginStart="4dp"
             android:gravity="center"
             android:textColor="@color/avtohit_text"
@@ -39,28 +39,23 @@
 
         <ImageView
             android:id="@+id/visualOrderTypeIcon"
-            android:layout_width="54dp"
-            android:layout_height="54dp"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
             android:layout_marginStart="4dp"
             android:contentDescription="@string/visual_order_media_type"
             android:scaleType="centerCrop" />
 
-        <TextView
-            android:id="@+id/visualOrderMeta"
+        <Space
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginEnd="6dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/avtohit_muted"
-            android:textSize="12sp" />
+            android:layout_weight="1" />
 
         <ImageButton
             android:id="@+id/visualOrderDuplicate"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginEnd="4dp"
             android:background="@drawable/bg_icon_button"
             android:contentDescription="@string/visual_order_duplicate"
@@ -71,8 +66,8 @@
 
         <ImageButton
             android:id="@+id/visualOrderRemove"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/bg_icon_button"
             android:contentDescription="@string/visual_order_remove"
             android:padding="9dp"
@@ -90,6 +85,14 @@
         android:ellipsize="none"
         android:includeFontPadding="false"
         android:textColor="@color/avtohit_text"
-        android:textSize="14sp"
+        android:textSize="15sp"
         android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/visualOrderMeta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/avtohit_muted"
+        android:textSize="13sp" />
 </LinearLayout>

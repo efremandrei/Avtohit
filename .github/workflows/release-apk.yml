@@ -52,6 +52,7 @@ jobs:
           from pathlib import Path
 
           version_name = ""
+          version_code = ""
           for gradle_file in (Path("app/build.gradle"), Path("app/build.gradle.kts")):
               if not gradle_file.exists():
                   continue
@@ -63,6 +64,8 @@ jobs:
               )
               if match:
                   version_name = match.group(1)
+                  code_match = re.search(r'^\s*versionCode\s*(?:=|\s)\s*(\d+)', gradle_file.read_text(encoding="utf-8"), re.MULTILINE)
+                  version_code = code_match.group(1) if code_match else ""
                   break
 
           if not version_name:
@@ -70,6 +73,9 @@ jobs:
 
           safe_version = re.sub(r"[^A-Za-z0-9._-]+", "-", version_name).strip("-")
           print(f"APP_VERSION={safe_version or '0.0.' + os.environ['GITHUB_RUN_NUMBER']}")
+          if not version_code:
+              raise SystemExit("Missing versionCode")
+          print(f"APP_BUILD={version_code}")
           PY
 
       - name: Prepare versioned downloadable APK
@@ -77,29 +83,23 @@ jobs:
         run: |
           mkdir -p release
           repo_name="${GITHUB_REPOSITORY#*/}"
-          apk_path="$(find . -path '*/build/outputs/apk/debug/*.apk' -type f | head -n 1)"
-
-          if [ -z "$apk_path" ]; then
-            echo "No debug APK was produced."
-            find . -path '*/build/outputs/*' -type f || true
-            exit 1
-          fi
-
-          versioned_apk="release/${repo_name}-v${APP_VERSION}-debug.apk"
-          cp "$apk_path" "$versioned_apk"
-
-          echo "APK_PATH=$versioned_apk" >> "$GITHUB_ENV"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            apk_path="app/build/outputs/apk/debug/app-${abi}-debug.apk"
+            test -f "$apk_path"
+            cp "$apk_path" "release/${repo_name}-v${APP_VERSION}-build-${APP_BUILD}-${abi}-debug.apk"
+          done
 
       - name: Publish downloadable GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: debug-v${{ env.APP_VERSION }}
-          name: Debug APK v${{ env.APP_VERSION }}
+          name: CI Debug APK v${{ env.APP_VERSION }} build ${{ env.APP_BUILD }}
           body: |
             Automatically built debug APK from the latest default-branch commit.
 
-            APK file name includes the app version number.
-          artifacts: ${{ env.APK_PATH }}
+            APK file names include the app version, build number, and CPU architecture.
+            CI debug builds use the runner's debug signing key. For in-place updates, use the latest verified release built with the existing signing key.
+          artifacts: release/*.apk
           allowUpdates: true
           replacesArtifacts: true
-          makeLatest: true
+          makeLatest: false
