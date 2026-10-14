@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.AVTOHIT" parent="Theme.AVTOHIT.Base">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenBackground">@color/avtohit_background</item>
+    </style>
+    <style name="Theme.AVTOHIT.Dark" parent="Theme.AVTOHIT">
+        <item name="android:windowBackground">@drawable/bg_startup_splash_dark</item>
+        <item name="android:windowSplashScreenBackground">#111615</item>
+        <item name="android:navigationBarColor">#111615</item>
+    </style>
+</resources>

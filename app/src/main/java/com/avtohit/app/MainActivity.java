@@ -13,6 +13,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
@@ -39,6 +40,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.VideoView;
 
@@ -315,9 +317,24 @@ public final class MainActivity extends Activity {
     private AppSkin currentSkin = AppSkin.LIGHT;
     private MediaPlayer previewPlayer;
     private volatile boolean activityActive = true;
+    private ScrollView dragScrollView;
+    private int dragScrollStep;
+    // Keep scrolling when a finger rests at an edge without new drag-location events.
+    private final Runnable dragScrollTicker = new Runnable() {
+        @Override
+        public void run() {
+            if (dragScrollView != null && dragScrollStep != 0 && !rendering) {
+                dragScrollView.scrollBy(0, dragScrollStep);
+                mainHandler.postDelayed(this, 16L);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        if (readSavedSkin() == AppSkin.DARK) {
+            setTheme(R.style.Theme_AVTOHIT_Dark);
+        }
         super.onCreate(savedInstanceState);
         AppUpdateChecker.checkDaily(this);
         setContentView(R.layout.activity_main);
@@ -335,6 +352,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
+        stopMediaDragScroll();
         pausePreview();
     }
 
@@ -830,6 +848,47 @@ public final class MainActivity extends Activity {
 
     private void renderVisualOrderRows(LinearLayout listContainer, ArrayList<VisualOrderItem> items, boolean commitOnChange) {
         listContainer.removeAllViews();
+        ScrollView scrollView = mediaScrollAncestor(listContainer);
+        if (scrollView != null) {
+            scrollView.setOnDragListener((view, event) -> {
+                if (!(event.getLocalState() instanceof VisualOrderItem)) {
+                    return false;
+                }
+                if (event.getAction() == DragEvent.ACTION_DRAG_LOCATION) {
+                    updateMediaDragScroll(view, event.getY());
+                } else if (event.getAction() == DragEvent.ACTION_DRAG_ENDED
+                        || event.getAction() == DragEvent.ACTION_DRAG_EXITED
+                        || event.getAction() == DragEvent.ACTION_DROP) {
+                    stopMediaDragScroll();
+                }
+                return event.getAction() != DragEvent.ACTION_DROP;
+            });
+        }
+        // Also accept drops in gaps and below the last row.
+        listContainer.setOnDragListener((view, event) -> {
+            if (!items.contains(event.getLocalState()) || rendering) {
+                return false;
+            }
+            if (event.getAction() == DragEvent.ACTION_DRAG_LOCATION) {
+                updateMediaDragScroll(view, event.getY());
+            } else if (event.getAction() == DragEvent.ACTION_DROP) {
+                stopMediaDragScroll();
+                int gap = 0;
+                while (gap < listContainer.getChildCount()) {
+                    View child = listContainer.getChildAt(gap);
+                    if (event.getY() < child.getTop() + child.getHeight() / 2f) {
+                        break;
+                    }
+                    gap++;
+                }
+                if (MediaOrder.move(items, (VisualOrderItem) event.getLocalState(), gap)) {
+                    handleVisualOrderListChanged(listContainer, items, commitOnChange);
+                }
+            } else if (event.getAction() == DragEvent.ACTION_DRAG_ENDED) {
+                stopMediaDragScroll();
+            }
+            return true;
+        });
 
         LayoutInflater inflater = LayoutInflater.from(this);
         for (int i = 0; i < items.size(); i++) {
@@ -854,6 +913,9 @@ public final class MainActivity extends Activity {
             styleVisualOrderRow(row);
             bindVisualOrderThumbnail(typeIcon, item);
             dragHandle.setOnLongClickListener(view -> {
+                if (rendering) {
+                    return false;
+                }
                 ClipData data = ClipData.newPlainText("visual-order", firstNonBlank(item.displayName, "media"));
                 boolean started = row.startDragAndDrop(data, new View.DragShadowBuilder(row), item, 0);
                 row.setAlpha(started ? 0.45f : 1f);
@@ -892,32 +954,91 @@ public final class MainActivity extends Activity {
             View row,
             boolean commitOnChange
     ) {
-        if (!(event.getLocalState() instanceof VisualOrderItem)) {
+        if (!items.contains(event.getLocalState()) || rendering) {
             return false;
         }
         switch (event.getAction()) {
             case DragEvent.ACTION_DRAG_STARTED:
                 return true;
             case DragEvent.ACTION_DRAG_ENTERED:
-                row.setAlpha(0.72f);
+                showMediaDropMarker(row, false);
+                return true;
+            case DragEvent.ACTION_DRAG_LOCATION:
+                showMediaDropMarker(row, event.getY() > row.getHeight() / 2f);
+                updateMediaDragScroll(row, event.getY());
                 return true;
             case DragEvent.ACTION_DRAG_EXITED:
+                row.setForeground(null);
                 row.setAlpha(1f);
                 return true;
             case DragEvent.ACTION_DROP:
+                stopMediaDragScroll();
+                row.setForeground(null);
                 int targetIndex = items.indexOf(targetItem);
                 if (event.getY() > row.getHeight() / 2f) {
                     targetIndex++;
                 }
-                moveVisualOrderItemToIndex(items, (VisualOrderItem) event.getLocalState(), targetIndex);
-                handleVisualOrderListChanged(listContainer, items, commitOnChange);
+                if (MediaOrder.move(items, (VisualOrderItem) event.getLocalState(), targetIndex)) {
+                    handleVisualOrderListChanged(listContainer, items, commitOnChange);
+                }
                 return true;
             case DragEvent.ACTION_DRAG_ENDED:
+                stopMediaDragScroll();
+                row.setForeground(null);
                 row.setAlpha(1f);
                 return true;
             default:
                 return true;
         }
+    }
+
+    private void showMediaDropMarker(View row, boolean below) {
+        GradientDrawable line = new GradientDrawable();
+        line.setColor(readyColor());
+        android.graphics.drawable.LayerDrawable marker = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{line});
+        marker.setLayerHeight(0, dp(3));
+        marker.setLayerGravity(0, (below ? android.view.Gravity.BOTTOM : android.view.Gravity.TOP)
+                | android.view.Gravity.FILL_HORIZONTAL);
+        row.setForeground(marker);
+    }
+
+    private ScrollView mediaScrollAncestor(View view) {
+        for (android.view.ViewParent parent = view.getParent(); parent != null; parent = parent.getParent()) {
+            if (parent instanceof ScrollView) {
+                return (ScrollView) parent;
+            }
+        }
+        return null;
+    }
+
+    private void updateMediaDragScroll(View target, float localY) {
+        ScrollView scroll = target instanceof ScrollView ? (ScrollView) target : mediaScrollAncestor(target);
+        Rect visible = new Rect();
+        if (scroll == null || !scroll.getGlobalVisibleRect(visible)) {
+            stopMediaDragScroll();
+            return;
+        }
+        int[] position = new int[2];
+        target.getLocationOnScreen(position);
+        float screenY = position[1] + localY;
+        int edge = Math.min(dp(64), visible.height() / 4);
+        int step = screenY < visible.top + edge ? -dp(8)
+                : screenY > visible.bottom - edge ? dp(8) : 0;
+        if (step == 0 || !scroll.canScrollVertically(step > 0 ? 1 : -1)) {
+            stopMediaDragScroll();
+            return;
+        }
+        dragScrollView = scroll;
+        dragScrollStep = step;
+        mainHandler.removeCallbacks(dragScrollTicker);
+        mainHandler.post(dragScrollTicker);
+    }
+
+    private void stopMediaDragScroll() {
+        mainHandler.removeCallbacks(dragScrollTicker);
+        dragScrollView = null;
+        dragScrollStep = 0;
     }
 
     private void handleVisualOrderListChanged(LinearLayout listContainer, ArrayList<VisualOrderItem> items, boolean commitOnChange) {
@@ -1234,22 +1355,6 @@ public final class MainActivity extends Activity {
 
     private void updateVideoSoundEditorSummary(TextView summary, SoundTimelineView timeline, long durationMs) {
         summary.setText(getString(R.string.video_sound_editor_summary, formatDuration(durationMs), timeline.effectsCopy().size()));
-    }
-
-    private void moveVisualOrderItemToIndex(ArrayList<VisualOrderItem> items, VisualOrderItem draggedItem, int targetIndex) {
-        int from = items.indexOf(draggedItem);
-        if (from < 0) {
-            return;
-        }
-        targetIndex = Math.max(0, Math.min(targetIndex, items.size()));
-        if (from < targetIndex) {
-            targetIndex--;
-        }
-        if (from == targetIndex) {
-            return;
-        }
-        items.remove(from);
-        items.add(Math.max(0, Math.min(targetIndex, items.size())), draggedItem);
     }
 
     private void applyVisualOrderItems(List<VisualOrderItem> items) {

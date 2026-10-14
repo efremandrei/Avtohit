@@ -467,6 +467,7 @@ public final class AvtohitProcessor {
                 if (!sameFile(videoFile, clipFile)) {
                     videoFiles.add(clipFile);
                 }
+                // The sort key is the displayed position, never the filename.
                 videoClips.add(new TimedClip(clipFile, clipDurationMs, i));
             }
 
@@ -860,6 +861,7 @@ public final class AvtohitProcessor {
 
                 if (!singleImageOutput) {
                     temporaryFiles.add(segmentFile);
+                    // Keep the user's arranged image order during pairwise merging.
                     clips.add(new TimedClip(segmentFile, durationMs, i));
                 }
             }

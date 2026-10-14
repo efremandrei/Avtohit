@@ -10,8 +10,9 @@ android {
         applicationId "com.avtohit.app"
         minSdk 24
         targetSdk 36
-        versionCode 23
-        versionName "0.1.22"
+        versionCode 24
+        versionName "0.1.23"
+        testInstrumentationRunner "com.avtohit.app.MediaOrderInstrumentation"
     }
 
     compileOptions {
@@ -30,5 +31,6 @@ android {
 }
 
 dependencies {
+    testImplementation "junit:junit:4.13.2"
     implementation "com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1"
 }
