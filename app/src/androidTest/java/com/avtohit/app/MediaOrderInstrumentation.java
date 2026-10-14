@@ -14,6 +14,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.EditText;
 import android.widget.ScrollView;
 import com.avtohit.app.media.AvtohitProcessor;
 import com.avtohit.app.media.ExportProfile;
@@ -29,10 +30,15 @@ import java.util.List;
 /** Device regression checks: real finger gestures, lifecycle restoration, and encoded output. */
 public final class MediaOrderInstrumentation extends Instrumentation {
     private MainActivity activity;
+    private String snapshotSkin;
     private final int[] colors = {Color.RED, Color.GREEN, Color.BLUE};
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        snapshotSkin = arguments != null ? arguments.getString("snapshot_skin") : null;
+        if (snapshotSkin != null) {
+            getTargetContext().getSharedPreferences("avtohit_settings", 0).edit().putString("app_skin", snapshotSkin).commit();
+        }
         start();
     }
 
@@ -55,8 +61,34 @@ public final class MediaOrderInstrumentation extends Instrumentation {
                 images.add(Uri.fromFile(file));
             }
             select(images);
+            runOnMainSync(() -> {
+                LinearLayout rows = activity.findViewById(R.id.mediaInlineList);
+                for (int i = 0; i < 3; i++) {
+                    EditText time = rows.getChildAt(i).findViewById(R.id.imageTimeInput);
+                    time.setText(String.valueOf(i + 1));
+                }
+            });
+            assertImageSeconds(1, 2, 3);
+            if (snapshotSkin != null) {
+                SystemClock.sleep(300L);
+                saveSnapshot(fixtures, "timing-" + snapshotSkin + ".png");
+                runOnMainSync(() -> {
+                    LinearLayout rows = activity.findViewById(R.id.mediaInlineList);
+                    EditText input = rows.getChildAt(0).findViewById(R.id.imageTimeInput);
+                    input.requestFocus();
+                    android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager)
+                            activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                    keyboard.showSoftInput(input, 0);
+                });
+                SystemClock.sleep(1200L);
+                saveSnapshot(fixtures, "timing-keyboard-" + snapshotSkin + ".png");
+                result.putString("stream", "Timing field and keyboard snapshots captured in " + snapshotSkin + " skin.\n");
+                finish(Activity.RESULT_OK, result);
+                return;
+            }
             dragLastToFirst();
             assertOrder("visualImageUris", "3.png", "1.png", "2.png");
+            assertImageSeconds(3, 1, 2);
 
             ActivityMonitor monitor = addMonitor(MainActivity.class.getName(), null, false);
             runOnMainSync(() -> activity.recreate());
@@ -66,11 +98,47 @@ public final class MediaOrderInstrumentation extends Instrumentation {
             activity = (MainActivity) recreated;
             waitForIdleSync();
             assertOrder("visualImageUris", "3.png", "1.png", "2.png");
+            assertImageSeconds(3, 1, 2);
             File imageOutput = new File(fixtures, "reordered-images.mp4");
             new AvtohitProcessor().renderImagesSilent(getTargetContext(), uris("visualImageUris"),
-                    Uri.fromFile(imageOutput), ExportProfile.P720_HORIZONTAL, 30, 1, null, null);
-            assertFrames(imageOutput);
-            sendStatus(0, message("PASS: photo drag order survives recreation and exported frames are blue/red/green"));
+                    Uri.fromFile(imageOutput), ExportProfile.P720_HORIZONTAL, 30, 0,
+                    value("visualImageSeconds"), null, null);
+            assertImageTiming(imageOutput);
+            Bitmap timingShot = getUiAutomation().takeScreenshot();
+            try (FileOutputStream out = new FileOutputStream(new File(fixtures, "image-timing-ui.png"))) {
+                timingShot.compress(Bitmap.CompressFormat.PNG, 100, out);
+            }
+            timingShot.recycle();
+            sendStatus(0, message("PASS: editable times stay attached after drag/recreation; export is blue 3s/red 1s/green 2s"));
+
+            File audio = new File(fixtures, "timing.mp3");
+            try (InputStream in = getContext().getAssets().open("order-qa/timing.mp3");
+                    FileOutputStream out = new FileOutputStream(audio)) {
+                byte[] buffer = new byte[8192];
+                for (int count; (count = in.read(buffer)) >= 0;) out.write(buffer, 0, count);
+            }
+            File musicalOutput = new File(fixtures, "timed-images-with-audio.mp4");
+            new AvtohitProcessor().renderImages(getTargetContext(), Uri.fromFile(audio),
+                    uris("visualImageUris"), Uri.fromFile(musicalOutput), ExportProfile.P720_HORIZONTAL,
+                    30, 9000L, 0, false, value("visualImageSeconds"), null, null);
+            assertTimedFrames(musicalOutput, 9000L,
+                    new long[]{500000L, 2500000L, 3500000L, 4500000L, 6500000L, 8500000L},
+                    new int[]{Color.BLUE, Color.BLUE, Color.RED, Color.GREEN, Color.BLUE, Color.BLUE});
+            sendStatus(0, message("PASS: individually timed photos loop until the MP3 ends"));
+
+            runOnMainSync(() -> {
+                LinearLayout rows = activity.findViewById(R.id.mediaInlineList);
+                rows.getChildAt(0).findViewById(R.id.visualOrderDuplicate).performClick();
+            });
+            assertImageSeconds(3, 3, 1, 2);
+            runOnMainSync(() -> {
+                LinearLayout rows = activity.findViewById(R.id.mediaInlineList);
+                EditText copyTime = rows.getChildAt(1).findViewById(R.id.imageTimeInput);
+                copyTime.setText("4");
+                copyTime.getText().replace(0, copyTime.length(), "99");
+            });
+            assertImageSeconds(3, 4, 1, 2);
+            sendStatus(0, message("PASS: duplicate times are independent and out-of-range input is rejected"));
 
             List<Uri> videos = new ArrayList<>();
             for (int i = 1; i <= 3; i++) {
@@ -83,6 +151,12 @@ public final class MediaOrderInstrumentation extends Instrumentation {
                 videos.add(Uri.fromFile(file));
             }
             select(videos);
+            LinearLayout videoRows = activity.findViewById(R.id.mediaInlineList);
+            for (int i = 0; i < videoRows.getChildCount(); i++) {
+                if (videoRows.getChildAt(i).findViewById(R.id.imageTimeControl).getVisibility() != View.GONE) {
+                    throw new AssertionError("An image-time control is visible on a video");
+                }
+            }
             dragLastToFirst();
             assertOrder("visualVideoUris", "3.mp4", "1.mp4", "2.mp4");
             File videoOutput = new File(fixtures, "reordered-videos.mp4");
@@ -116,7 +190,7 @@ public final class MediaOrderInstrumentation extends Instrumentation {
             pointer(down, MotionEvent.ACTION_UP, start[0], edgeY);
             waitForIdleSync();
             sendStatus(0, message("PASS: long-list drag auto-scroll"));
-            result.putString("stream", "3 device checks passed; photo/video frame order verified.\n");
+            result.putString("stream", "5 device checks passed; per-image timing, MP3 loop, duplication, ordering, and scrolling verified.\n");
             finish(Activity.RESULT_OK, result);
         } catch (Throwable error) {
             result.putString("stream", android.util.Log.getStackTraceString(error));
@@ -140,6 +214,8 @@ public final class MediaOrderInstrumentation extends Instrumentation {
     }
 
     private void dragLastToFirst() {
+        waitForIdleSync();
+        SystemClock.sleep(250L);
         LinearLayout rows = activity.findViewById(R.id.mediaInlineList);
         if (rows.getChildCount() != 3) throw new AssertionError("Expected three rows");
         int[] start = center(rows.getChildAt(2).findViewById(R.id.visualOrderDragHandle));
@@ -211,6 +287,45 @@ public final class MediaOrderInstrumentation extends Instrumentation {
                         || Math.abs(Color.green(pixel) - Color.green(expected[i])) > 30
                         || Math.abs(Color.blue(pixel) - Color.blue(expected[i])) > 30) {
                     throw new AssertionError("Unexpected frame color " + i + ": " + Integer.toHexString(pixel));
+                }
+            }
+        } finally { retriever.release(); }
+    }
+
+    private void assertImageSeconds(Integer... expected) throws Exception {
+        List<Integer> actual = value("visualImageSeconds");
+        if (!actual.equals(Arrays.asList(expected))) throw new AssertionError("Times: " + actual);
+    }
+
+    private void saveSnapshot(File folder, String name) throws Exception {
+        Bitmap snapshot = getUiAutomation().takeScreenshot();
+        try (FileOutputStream out = new FileOutputStream(new File(folder, name))) {
+            snapshot.compress(Bitmap.CompressFormat.PNG, 100, out);
+        }
+        snapshot.recycle();
+    }
+
+    private void assertImageTiming(File video) throws Exception {
+        assertTimedFrames(video, 6000L,
+                new long[]{500000L, 2500000L, 3500000L, 4500000L, 5500000L},
+                new int[]{Color.BLUE, Color.BLUE, Color.RED, Color.GREEN, Color.GREEN});
+    }
+
+    private void assertTimedFrames(File video, long expectedDuration, long[] times, int[] colors) throws Exception {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(video.getAbsolutePath());
+            long duration = Long.parseLong(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+            if (Math.abs(duration - expectedDuration) > 150L) throw new AssertionError("Video duration: " + duration);
+            for (int i = 0; i < times.length; i++) {
+                Bitmap frame = retriever.getFrameAtTime(times[i], MediaMetadataRetriever.OPTION_CLOSEST);
+                if (frame == null) throw new AssertionError("Missing frame at " + times[i]);
+                int pixel = frame.getPixel(frame.getWidth() / 2, frame.getHeight() / 2);
+                frame.recycle();
+                if (Math.abs(Color.red(pixel) - Color.red(colors[i])) > 30
+                        || Math.abs(Color.green(pixel) - Color.green(colors[i])) > 30
+                        || Math.abs(Color.blue(pixel) - Color.blue(colors[i])) > 30) {
+                    throw new AssertionError("Wrong frame at " + times[i]);
                 }
             }
         } finally { retriever.release(); }

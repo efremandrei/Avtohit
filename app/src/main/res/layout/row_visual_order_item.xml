@@ -88,11 +88,47 @@
         android:textSize="15sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/visualOrderMeta"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="@color/avtohit_muted"
-        android:textSize="13sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/visualOrderMeta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/avtohit_muted"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/imageTimeControl"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+            <EditText
+                android:id="@+id/imageTimeInput"
+                android:layout_width="64dp"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:gravity="center"
+                android:imeOptions="actionDone"
+                android:inputType="number"
+                android:maxLines="1"
+                android:selectAllOnFocus="true"
+                android:saveEnabled="false"
+                android:textSize="16sp" />
+            <TextView
+                android:id="@+id/imageTimeUnit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingEnd="4dp"
+                android:text="@string/image_time_unit"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

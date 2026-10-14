@@ -220,11 +220,31 @@ public final class AvtohitProcessor {
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
     ) throws IOException, AvtohitException {
+        return renderImages(context, audioUri, imageUris, destinationUri, exportProfile, frameRate,
+                targetDurationMs, slideSeconds, autoSplitTime, null, progressListener, debugLogger);
+    }
+
+    public Result renderImages(
+            Context context,
+            Uri audioUri,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            long targetDurationMs,
+            int slideSeconds,
+            boolean autoSplitTime,
+            List<Integer> imageSeconds,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
         if (imageUris == null || imageUris.isEmpty()) {
             throw new AvtohitException("At least one image must be selected.");
         }
-        boolean useAutoSplit = autoSplitTime && slideSeconds <= 0 && imageUris.size() > 1;
-        if (!useAutoSplit && (slideSeconds <= 0 || imageUris.size() == 1)) {
+        boolean useAutoSplit = autoSplitTime && slideSeconds <= 0;
+        List<Long> plannedDurations = imageTimingPlan(imageUris.size(), imageSeconds, slideSeconds,
+                useAutoSplit, targetDurationMs, true);
+        if (imageUris.size() == 1 || (slideSeconds == 0 && !useAutoSplit && !ImageTiming.hasOverrides(imageSeconds))) {
             log(debugLogger, "slideshow_delegated_to_single_image slideSeconds=" + slideSeconds
                     + " imageCount=" + imageUris.size()
                     + " autoSplitTime=" + autoSplitTime);
@@ -257,9 +277,8 @@ public final class AvtohitProcessor {
             log(debugLogger, "copy_audio_to_cache target=" + audioFile.getAbsolutePath());
             copyUriToFile(resolver, audioUri, audioFile);
             log(debugLogger, "audio_cache_bytes=" + audioFile.length());
-            int cycleImageCount = useAutoSplit
-                    ? imageUris.size()
-                    : slideshowCycleImageCount(imageUris.size(), targetDurationMs, slideSeconds);
+            int cycleImageCount = ImageTiming.visibleImageCount(plannedDurations, targetDurationMs);
+            List<Long> cycleDurations = new ArrayList<>(plannedDurations.subList(0, cycleImageCount));
             int skippedImageCount = Math.max(0, imageUris.size() - cycleImageCount);
             log(debugLogger, "slideshow_cycle_selection selectedImageCount=" + imageUris.size()
                     + " usedImageCount=" + cycleImageCount
@@ -274,9 +293,9 @@ public final class AvtohitProcessor {
                 imageFiles.add(imageFile);
             }
 
-            long cycleDurationMs = useAutoSplit
-                    ? targetDurationMs
-                    : (long) imageFiles.size() * slideSeconds * 1000L;
+            long cycleDurationMs = 0L;
+            for (long durationMs : cycleDurations) cycleDurationMs += durationMs;
+            log(debugLogger, "per_image_durations_ms=" + cycleDurations);
             long cycleProgressBudgetMs = Math.max(1L, targetDurationMs / 3L);
             log(debugLogger, "slideshow_cycle imageCount=" + imageFiles.size()
                     + " slideSeconds=" + slideSeconds
@@ -291,7 +310,7 @@ public final class AvtohitProcessor {
                     cycleFile,
                     exportProfile,
                     frameRate,
-                    slideshowDurationsMs(imageFiles.size(), slideSeconds, useAutoSplit ? targetDurationMs : 0L, debugLogger),
+                    cycleDurations,
                     progressListener,
                     0L,
                     cycleProgressBudgetMs,
@@ -341,12 +360,26 @@ public final class AvtohitProcessor {
             ProgressListener progressListener,
             AvtohitDebugLogger debugLogger
     ) throws IOException, AvtohitException {
+        return renderImagesSilent(context, imageUris, destinationUri, exportProfile, frameRate,
+                slideSeconds, null, progressListener, debugLogger);
+    }
+
+    public Result renderImagesSilent(
+            Context context,
+            List<Uri> imageUris,
+            Uri destinationUri,
+            ExportProfile exportProfile,
+            int frameRate,
+            int slideSeconds,
+            List<Integer> imageSeconds,
+            ProgressListener progressListener,
+            AvtohitDebugLogger debugLogger
+    ) throws IOException, AvtohitException {
         if (imageUris == null || imageUris.isEmpty()) {
             throw new AvtohitException("At least one image must be selected.");
         }
-        if (slideSeconds <= 0) {
-            throw new AvtohitException("Image time must be above 0 seconds when no MP3 is selected.");
-        }
+        List<Long> plannedDurations = imageTimingPlan(imageUris.size(), imageSeconds, slideSeconds,
+                false, 0L, false);
         if (slideSeconds > 60) {
             throw new AvtohitException("Image time must be between 0 and 60 seconds.");
         }
@@ -364,7 +397,8 @@ public final class AvtohitProcessor {
         long runId = System.currentTimeMillis();
         File outputFile = new File(workDir, "silent-images-" + runId + ".mp4");
         ArrayList<File> imageFiles = new ArrayList<>();
-        long targetDurationMs = (long) imageUris.size() * slideSeconds * 1000L;
+        long targetDurationMs = 0L;
+        for (long durationMs : plannedDurations) targetDurationMs += durationMs;
 
         try {
             log(debugLogger, "silent_slideshow imageCount=" + imageUris.size()
@@ -372,6 +406,7 @@ public final class AvtohitProcessor {
                     + " targetDurationMs=" + targetDurationMs
                     + " frameRate=" + frameRate
                     + " export=" + exportProfile.label);
+            log(debugLogger, "per_image_durations_ms=" + plannedDurations);
             for (int i = 0; i < imageUris.size(); i++) {
                 Uri imageUri = imageUris.get(i);
                 File imageFile = new File(workDir, "silent-image-" + runId + "-" + i + ".jpg");
@@ -388,7 +423,7 @@ public final class AvtohitProcessor {
                     outputFile,
                     exportProfile,
                     frameRate,
-                    slideshowDurationsMs(imageFiles.size(), slideSeconds, 0L, debugLogger),
+                    plannedDurations,
                     progressListener,
                     0L,
                     targetDurationMs,
@@ -774,38 +809,13 @@ public final class AvtohitProcessor {
         };
     }
 
-    private static int slideshowCycleImageCount(int selectedImageCount, long targetDurationMs, int slideSeconds) {
-        if (selectedImageCount <= 0) {
-            return 0;
+    private static List<Long> imageTimingPlan(int count, List<Integer> seconds, int sharedSeconds,
+            boolean autoSplit, long audioDurationMs, boolean withAudio) throws AvtohitException {
+        try {
+            return ImageTiming.durations(count, seconds, sharedSeconds, autoSplit, audioDurationMs, withAudio);
+        } catch (IllegalArgumentException error) {
+            throw new AvtohitException(error.getMessage());
         }
-        long slideDurationMs = Math.max(1L, (long) slideSeconds * 1000L);
-        long imagesThatCanAppear = (targetDurationMs + slideDurationMs - 1L) / slideDurationMs;
-        if (imagesThatCanAppear <= 0L) {
-            return 1;
-        }
-        return (int) Math.min(selectedImageCount, Math.min((long) Integer.MAX_VALUE, imagesThatCanAppear));
-    }
-
-    private static List<Long> slideshowDurationsMs(
-            int imageCount,
-            int slideSeconds,
-            long autoSplitTargetDurationMs,
-            AvtohitDebugLogger debugLogger
-    ) {
-        if (autoSplitTargetDurationMs > 0L) {
-            List<Long> durations = splitDurationAcrossImages(autoSplitTargetDurationMs, imageCount);
-            log(debugLogger, "auto_split_plan imageCount=" + imageCount
-                    + " targetDurationMs=" + autoSplitTargetDurationMs
-                    + " firstImageDurationMs=" + (durations.isEmpty() ? 0L : durations.get(0)));
-            return durations;
-        }
-
-        ArrayList<Long> durations = new ArrayList<>();
-        long durationMs = Math.max(1L, (long) slideSeconds * 1000L);
-        for (int i = 0; i < imageCount; i++) {
-            durations.add(durationMs);
-        }
-        return durations;
     }
 
     private static String buildSlideshowCyclePairwise(

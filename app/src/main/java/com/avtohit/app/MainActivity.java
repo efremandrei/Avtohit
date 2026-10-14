@@ -28,12 +28,16 @@ import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.text.method.LinkMovementMethod;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.text.InputFilter;
 import android.view.DragEvent;
 import android.view.WindowInsets;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -47,6 +51,7 @@ import android.widget.VideoView;
 import com.avtohit.app.media.AvtohitException;
 import com.avtohit.app.media.AvtohitProcessor;
 import com.avtohit.app.media.ExportProfile;
+import com.avtohit.app.media.ImageTiming;
 import com.avtohit.app.media.VideoSoundEffect;
 
 import java.io.IOException;
@@ -78,6 +83,7 @@ public final class MainActivity extends Activity {
     private static final String STATE_VISUAL_DURATION = "visual_duration";
     private static final String STATE_VISUAL_IMAGE_URIS = "visual_image_uris";
     private static final String STATE_VISUAL_IMAGE_NAMES = "visual_image_names";
+    private static final String STATE_VISUAL_IMAGE_SECONDS = "visual_image_seconds";
     private static final String STATE_VISUAL_VIDEO_URIS = "visual_video_uris";
     private static final String STATE_VISUAL_VIDEO_NAMES = "visual_video_names";
     private static final String STATE_VISUAL_VIDEO_EPOCHS = "visual_video_epochs";
@@ -188,6 +194,7 @@ public final class MainActivity extends Activity {
         final long modifiedEpochMs;
         final long durationMs;
         ArrayList<VideoSoundEffect> soundEffects;
+        int imageSeconds;
 
         VisualOrderItem(Uri uri, String displayName, boolean video, long modifiedEpochMs, long durationMs) {
             this(uri, displayName, video, modifiedEpochMs, durationMs, null);
@@ -203,7 +210,9 @@ public final class MainActivity extends Activity {
         }
 
         VisualOrderItem duplicate() {
-            return new VisualOrderItem(uri, displayName, video, modifiedEpochMs, durationMs, soundEffects);
+            VisualOrderItem copy = new VisualOrderItem(uri, displayName, video, modifiedEpochMs, durationMs, soundEffects);
+            copy.imageSeconds = imageSeconds;
+            return copy;
         }
     }
 
@@ -299,6 +308,7 @@ public final class MainActivity extends Activity {
     private String visualDisplayName;
     private final ArrayList<Uri> visualImageUris = new ArrayList<>();
     private final ArrayList<String> visualImageNames = new ArrayList<>();
+    private final ArrayList<Integer> visualImageSeconds = new ArrayList<>();
     private final ArrayList<Uri> visualVideoUris = new ArrayList<>();
     private final ArrayList<String> visualVideoNames = new ArrayList<>();
     private final ArrayList<Long> visualVideoEpochs = new ArrayList<>();
@@ -336,6 +346,12 @@ public final class MainActivity extends Activity {
             setTheme(R.style.Theme_AVTOHIT_Dark);
         }
         super.onCreate(savedInstanceState);
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        }
         AppUpdateChecker.checkDaily(this);
         setContentView(R.layout.activity_main);
 
@@ -378,6 +394,7 @@ public final class MainActivity extends Activity {
         outState.putLong(STATE_VISUAL_DURATION, visualDurationMs);
         outState.putStringArrayList(STATE_VISUAL_IMAGE_URIS, visualImageUriStrings());
         outState.putStringArrayList(STATE_VISUAL_IMAGE_NAMES, new ArrayList<>(visualImageNames));
+        outState.putIntegerArrayList(STATE_VISUAL_IMAGE_SECONDS, new ArrayList<>(visualImageSeconds));
         outState.putStringArrayList(STATE_VISUAL_VIDEO_URIS, visualVideoUriStrings());
         outState.putStringArrayList(STATE_VISUAL_VIDEO_NAMES, new ArrayList<>(visualVideoNames));
         outState.putLongArray(STATE_VISUAL_VIDEO_EPOCHS, longArrayFromList(visualVideoEpochs));
@@ -533,6 +550,8 @@ public final class MainActivity extends Activity {
     private void restoreVisualImageState(Bundle savedInstanceState) {
         visualImageUris.clear();
         visualImageNames.clear();
+        visualImageSeconds.clear();
+        ArrayList<Integer> savedSeconds = savedInstanceState.getIntegerArrayList(STATE_VISUAL_IMAGE_SECONDS);
         ArrayList<String> savedUriStrings = savedInstanceState.getStringArrayList(STATE_VISUAL_IMAGE_URIS);
         ArrayList<String> savedNames = savedInstanceState.getStringArrayList(STATE_VISUAL_IMAGE_NAMES);
         if (savedUriStrings != null) {
@@ -552,6 +571,10 @@ public final class MainActivity extends Activity {
         if (visualImageUris.isEmpty() && visualUri != null && !visualIsVideo) {
             visualImageUris.add(visualUri);
             visualImageNames.add(visualDisplayName != null ? visualDisplayName : getString(R.string.visual_track_default));
+        }
+        for (int i = 0; i < visualImageUris.size(); i++) {
+            visualImageSeconds.add(savedSeconds != null && i < savedSeconds.size() && savedSeconds.get(i) != null
+                    ? clampSlideSeconds(savedSeconds.get(i)) : 0);
         }
     }
 
@@ -703,6 +726,7 @@ public final class MainActivity extends Activity {
         for (ImageSelection selection : imageSelections) {
             visualImageUris.add(selection.uri);
             visualImageNames.add(selection.displayName);
+            visualImageSeconds.add(0);
         }
 
         ImageSelection firstImage = imageSelections.get(0);
@@ -752,6 +776,7 @@ public final class MainActivity extends Activity {
         visualDurationMs = visualIsVideo ? readDuration(uri) : 0L;
         visualImageUris.clear();
         visualImageNames.clear();
+        visualImageSeconds.clear();
         visualVideoUris.clear();
         visualVideoNames.clear();
         visualVideoEpochs.clear();
@@ -759,6 +784,7 @@ public final class MainActivity extends Activity {
         if (!visualIsVideo) {
             visualImageUris.add(uri);
             visualImageNames.add(visualDisplayName);
+            visualImageSeconds.add(0);
         } else {
             visualVideoUris.add(uri);
             visualVideoNames.add(visualDisplayName);
@@ -831,13 +857,15 @@ public final class MainActivity extends Activity {
             return items;
         }
         for (int i = 0; i < visualImageUris.size(); i++) {
-            items.add(new VisualOrderItem(
+            VisualOrderItem item = new VisualOrderItem(
                     visualImageUris.get(i),
                     valueAt(visualImageNames, i, getString(R.string.visual_track_default)),
                     false,
                     0L,
                     0L
-            ));
+            );
+            item.imageSeconds = i < visualImageSeconds.size() ? visualImageSeconds.get(i) : 0;
+            items.add(item);
         }
         return items;
     }
@@ -912,6 +940,7 @@ public final class MainActivity extends Activity {
 
             styleVisualOrderRow(row);
             bindVisualOrderThumbnail(typeIcon, item);
+            bindImageTimeControl(row, item, items, commitOnChange);
             dragHandle.setOnLongClickListener(view -> {
                 if (rendering) {
                     return false;
@@ -1396,6 +1425,7 @@ public final class MainActivity extends Activity {
             for (VisualOrderItem item : items) {
                 visualImageUris.add(item.uri);
                 visualImageNames.add(firstNonBlank(item.displayName, getString(R.string.visual_track_default)));
+                visualImageSeconds.add(item.imageSeconds);
             }
             VisualOrderItem firstItem = items.get(0);
             visualUri = firstItem.uri;
@@ -1424,6 +1454,7 @@ public final class MainActivity extends Activity {
         visualDurationMs = 0L;
         visualImageUris.clear();
         visualImageNames.clear();
+        visualImageSeconds.clear();
         visualVideoUris.clear();
         visualVideoNames.clear();
         visualVideoEpochs.clear();
@@ -1478,7 +1509,9 @@ public final class MainActivity extends Activity {
 
     private void renderTo(Uri destinationUri) {
         if (!canStartMerge()) {
-            status.setText(R.string.select_media_before_export);
+            String timingError = imageTimingError();
+            if (timingError != null) status.setText(timingError);
+            else status.setText(R.string.select_media_before_export);
             return;
         }
 
@@ -1504,6 +1537,7 @@ public final class MainActivity extends Activity {
         String selectedAudioName = audioDisplayName;
         String selectedVisualName = visualDisplayName;
         ArrayList<String> selectedImageNames = new ArrayList<>(visualImageNames);
+        ArrayList<Integer> selectedImageSeconds = new ArrayList<>(visualImageSeconds);
         ArrayList<String> selectedVideoNames = new ArrayList<>(visualVideoNames);
         ArrayList<Long> selectedVideoEpochs = new ArrayList<>(visualVideoEpochs);
         ArrayList<Long> selectedVideoDurations = new ArrayList<>(visualVideoDurations);
@@ -1547,6 +1581,7 @@ public final class MainActivity extends Activity {
                                 selectedProfile,
                                 selectedFrameRate,
                                 selectedSlideSeconds,
+                                selectedImageSeconds,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
                         );
@@ -1587,6 +1622,7 @@ public final class MainActivity extends Activity {
                                 selectedAudioDurationMs,
                                 selectedSlideSeconds,
                                 selectedAutoSplitTime,
+                                selectedImageSeconds,
                                 (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
                                 selectedLogger
                         );
@@ -1822,11 +1858,67 @@ public final class MainActivity extends Activity {
     }
 
     private boolean isPicturesOnlyReady() {
-        return isPicturesOnlySelected() && slideSeconds > 0;
+        return isPicturesOnlySelected() && imageTimingError() == null;
     }
 
     private boolean canStartMerge() {
-        return visualUri != null && (audioUri != null || isSingleVideoRepeatSelected() || isVideoSequenceSelected() || isPicturesOnlyReady());
+        return visualUri != null && (!isImageVisualSelected() || imageTimingError() == null)
+                && (audioUri != null || isSingleVideoRepeatSelected() || isVideoSequenceSelected() || isPicturesOnlyReady());
+    }
+
+    private String imageTimingError() {
+        if (!isImageVisualSelected()) return null;
+        try {
+            ImageTiming.durations(visualImageUris.size(), visualImageSeconds, slideSeconds,
+                    autoSplitTime && audioUri != null, audioDurationMs, audioUri != null);
+            return null;
+        } catch (IllegalArgumentException error) {
+            return error.getMessage();
+        }
+    }
+
+    private void bindImageTimeControl(View row, VisualOrderItem item, ArrayList<VisualOrderItem> items, boolean commitOnChange) {
+        View control = row.findViewById(R.id.imageTimeControl);
+        control.setVisibility(item.video ? View.GONE : View.VISIBLE);
+        if (item.video) return;
+        EditText input = row.findViewById(R.id.imageTimeInput);
+        // Repeated row IDs cannot restore distinct EditText values; the media model owns this state.
+        TextView unit = row.findViewById(R.id.imageTimeUnit);
+        input.setText(String.valueOf(item.imageSeconds));
+        input.setTextColor(currentSkin.textColor);
+        input.setBackgroundTintList(ColorStateList.valueOf(readyColor()));
+        unit.setTextColor(currentSkin.mutedColor);
+        input.setContentDescription(getString(R.string.image_time_for_item, item.displayName));
+        input.setFilters(new InputFilter[]{(source, start, end, dest, dstart, dend) -> {
+            String text = dest.subSequence(0, dstart).toString()
+                    + source.subSequence(start, end) + dest.subSequence(dend, dest.length());
+            if (text.isEmpty()) return null;
+            try {
+                if (text.length() <= 2 && Integer.parseInt(text) >= 0 && Integer.parseInt(text) <= 60) return null;
+            } catch (NumberFormatException ignored) { }
+            return dest.subSequence(dstart, dend);
+        }});
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable text) {
+                item.imageSeconds = text.length() == 0 ? 0 : Integer.parseInt(text.toString());
+                int index = items.indexOf(item);
+                if (commitOnChange && index >= 0 && index < visualImageSeconds.size()) {
+                    visualImageSeconds.set(index, item.imageSeconds);
+                }
+            }
+        });
+        input.setOnFocusChangeListener((view, focused) -> {
+            if (!focused && input.length() == 0) input.setText("0");
+        });
+        input.setOnEditorActionListener((view, action, event) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
+            input.clearFocus();
+            android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (keyboard != null) keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+            return true;
+        });
     }
 
     private String visualDetailLine() {
@@ -1859,11 +1951,13 @@ public final class MainActivity extends Activity {
     }
 
     private String imageChangeSummary() {
+        if (ImageTiming.hasOverrides(visualImageSeconds)) return getString(R.string.image_time_per_item);
         return imageChangeSummary(slideSeconds, autoSplitTime && audioUri != null);
     }
 
     private String imageChangeSummary(int seconds, boolean autoSplit) {
         if (seconds <= 0) {
+            if (!autoSplit && ImageTiming.hasOverrides(visualImageSeconds)) return getString(R.string.image_time_no_default);
             return autoSplit ? getString(R.string.image_time_auto_split) : getString(R.string.image_time_first_only);
         }
         return getString(R.string.image_time_seconds, seconds);
@@ -2077,7 +2171,9 @@ public final class MainActivity extends Activity {
                     refreshUi();
                     if (startExportWhenSaved) {
                         if (!canStartMerge()) {
-                            status.setText(R.string.select_media_before_export);
+                            String timingError = imageTimingError();
+                            if (timingError != null) status.setText(timingError);
+                            else status.setText(R.string.select_media_before_export);
                         } else {
                             openOutputPicker();
                         }
@@ -2871,11 +2967,15 @@ public final class MainActivity extends Activity {
     }
 
     private void applyTopInset() {
-        final View content = ((View) findViewById(android.R.id.content)).getRootView();
+        final View content = findViewById(R.id.appRoot);
         content.setOnApplyWindowInsetsListener((view, insets) -> {
             int topInset = 0;
             if (android.os.Build.VERSION.SDK_INT >= 30) {
                 topInset = insets.getInsets(WindowInsets.Type.statusBars()).top;
+                int bottomInset = Math.max(insets.getInsets(WindowInsets.Type.navigationBars()).bottom,
+                        insets.getInsets(WindowInsets.Type.ime()).bottom);
+                bottomActionsBar.setPadding(bottomActionsBar.getPaddingLeft(), bottomActionsBar.getPaddingTop(),
+                        bottomActionsBar.getPaddingRight(), dp(12) + bottomInset);
             } else {
                 topInset = insets.getSystemWindowInsetTop();
             }

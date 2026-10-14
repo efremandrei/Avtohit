@@ -26,6 +26,8 @@ These are split by CPU architecture so each APK stays below GitHub's 100 MB file
 
 Loaded photos or videos play in the numbered list order, from top to bottom. Numeric filename sorting sets the initial order only. Long-press a drag handle to move an item to the insertion line; hold near the screen edge to scroll a long list. The arranged order is preserved when the screen is recreated and when exporting.
 
+Image items have an editable `sec` field. Set 1-60 seconds to override that image's display time, or 0 to inherit the shared Image time (or its automatic share of the song). Reordering, duplicating, and screen recreation preserve these values. A silent slideshow requires a positive resolved time for every image; its length is the sum of those times. With an MP3, the sequence loops until the soundtrack ends. Video rows do not show this control.
+
 Reorder regression checks:
 
 ```powershell
@@ -35,7 +37,7 @@ adb install -r app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk
 adb shell am instrument -w com.avtohit.app.test/com.avtohit.app.MediaOrderInstrumentation
 ```
 
-The device checks use a 1080x3000 test display, real drag gestures, activity recreation, and encoded frame sampling for both photo and video sequences. They also check auto-scroll. Use an isolated emulator with `adb shell wm size 1080x3000`; restore it afterward with `adb shell wm size reset`.
+The device checks use a 1080x3600 test display, real drag gestures, activity recreation, individual times and duplicates, and encoded frame sampling for silent/music-backed photo exports and video sequences. They also check auto-scroll. Use an isolated emulator with `adb shell wm size 1080x3600`; restore it afterward with `adb shell wm size reset`. Add `-e snapshot_skin dark` (or `light`) to the instrumentation command to capture timing-field and keyboard snapshots instead of running the export checks.
 
 - MP3 + picture: the picture is looped as the only video image, and the MP3 is copied into the MP4 as the soundtrack.
 - MP3 + video: the original video audio is ignored, the video is looped to the MP3 length, and the MP3 is copied into the MP4 as the soundtrack.
