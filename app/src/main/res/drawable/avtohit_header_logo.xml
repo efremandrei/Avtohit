@@ -1,0 +1,87 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="72dp"
+    android:viewportWidth="320"
+    android:viewportHeight="72">
+    <!-- Left App Emblem Badge -->
+    <path
+        android:fillColor="#12664F"
+        android:pathData="M14,12L46,12C51.5,12 56,16.5 56,22L56,50C56,55.5 51.5,60 46,60L14,60C8.5,60 4,55.5 4,50L4,22C4,16.5 8.5,12 14,12Z" />
+    <path
+        android:fillColor="#D4A359"
+        android:pathData="M30,19A17,17 0 1,1 29.99,19ZM30,22A14,14 0 1,0 30.01,22Z" />
+    <path
+        android:fillColor="#F7F8F5"
+        android:pathData="M14,45L19,26L23,26L28,45L24.2,45L23.2,40.5L18.8,40.5L17.8,45Z" />
+    <path
+        android:fillColor="#12664F"
+        android:pathData="M19.6,37.2L22.4,37.2L21,30.5Z" />
+    <path
+        android:fillColor="#F7F8F5"
+        android:pathData="M26.5,26L30.2,26L33,38.5L35.8,26L39.5,26L34.8,45L31.2,45Z" />
+    <path
+        android:fillColor="#E06D3B"
+        android:pathData="M39.5,29L49.5,35.5L39.5,42Z" />
+
+    <!-- 'A' -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M66,54L78,18L84.5,18L96.5,54L90.2,54L87.4,45L75.1,45L72.3,54Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M76.8,39.8L85.7,39.8L81.25,25.2Z" />
+    <path
+        android:fillColor="#74D7B5"
+        android:pathData="M76.5,39.5h9.5v4.2h-9.5z" />
+
+    <!-- 'V' + Play Circle -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M98,18L104.2,18L112.5,44.5L120.8,18L127,18L115.8,54L109.2,54Z" />
+    <path
+        android:fillColor="#D4A359"
+        android:pathData="M112.5,9A7.5,7.5 0 1,1 112.49,9ZM112.5,11A5.5,5.5 0 1,0 112.51,11Z" />
+    <path
+        android:fillColor="#E06D3B"
+        android:pathData="M110.5,13.5L116,16.5L110.5,19.5Z" />
+
+    <!-- 'T' -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M129,18L155,18L155,23.5L145,23.5L145,54L139,54L139,23.5L129,23.5Z" />
+
+    <!-- 'O' as Gold Audio Waveform Ring -->
+    <path
+        android:fillColor="#D4A359"
+        android:pathData="M176,17A19,19 0 1,1 175.99,17ZM176,22.5A13.5,13.5 0 1,0 176.01,22.5Z" />
+    <!-- Waveform bars inside O -->
+    <path
+        android:fillColor="#74D7B5"
+        android:pathData="M167,34h2v4h-2zM170.5,30h2v12h-2zM174,26h2v20h-2zM177.5,31h2v10h-2zM181,28h2v16h-2zM184.5,33h2v6h-2z" />
+
+    <!-- 'H' -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M201,18L207,18L207,33L221,33L221,18L227,18L227,54L221,54L221,38.5L207,38.5L207,54L201,54Z" />
+
+    <!-- 'I' + Equalizer Sliders -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M235,18L241,18L241,54L235,54Z" />
+    <path
+        android:fillColor="#D4A359"
+        android:pathData="M246,24h2v24h-2zM251,24h2v24h-2zM245,30h4v3h-4zM250,39h4v3h-4z" />
+
+    <!-- 'T' -->
+    <path
+        android:fillColor="#196A54"
+        android:pathData="M257,18L283,18L283,23.5L273,23.5L273,54L267,54L267,23.5L257,23.5Z" />
+
+    <!-- Right Film & Spectrum Accents -->
+    <path
+        android:fillColor="#D4A359"
+        android:pathData="M298,16A8,8 0 1,1 297.99,16ZM298,18A6,6 0 1,0 298.01,18Z" />
+    <path
+        android:fillColor="#E06D3B"
+        android:pathData="M290,44h3v10h-3zM295,39h3v15h-3zM300,46h3v8h-3zM305,41h3v13h-3z" />
+</vector>

@@ -94,6 +94,7 @@ public final class MainActivity extends Activity {
     private static final String STATE_SLIDE_SECONDS = "slide_seconds";
     private static final String STATE_AUTO_SPLIT_TIME = "auto_split_time";
     private static final String STATE_VIDEO_REPEAT_COUNT = "video_repeat_count";
+    private static final String STATE_SPLASH_SHOWN = "splash_shown";
     private static final int MAX_PREVIEW_BITMAP_SIZE = 1440;
     private static final int MAX_VIDEO_REPEAT_COUNT = 60;
     private static final int POSITIVE_READY_LIGHT = 0xFF12664F;
@@ -139,11 +140,13 @@ public final class MainActivity extends Activity {
                     return skin;
                 }
             }
-            return LIGHT;
+            return DARK;
         }
     }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(2);
+    private final android.util.LruCache<String, Bitmap> thumbnailCache = new android.util.LruCache<>(48);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AvtohitProcessor processor = new AvtohitProcessor();
     private AvtohitDebugLogger debugLogger;
@@ -279,6 +282,12 @@ public final class MainActivity extends Activity {
     private TextView status;
     private TextView previewTitle;
     private ImageView headerBanner;
+    private ImageButton themeToggleButton;
+    private View loadedAudioRow;
+    private ImageButton clearAudioButton;
+    private View startupSplashOverlay;
+    private TextView splashSubtitleView;
+    private TextView splashVersionView;
     private ImageView previewArtwork;
     private ImageButton playButton;
     private SeekBar previewSeek;
@@ -324,7 +333,8 @@ public final class MainActivity extends Activity {
     private int slideSeconds;
     private int videoRepeatCount = 1;
     private boolean autoSplitTime;
-    private AppSkin currentSkin = AppSkin.LIGHT;
+    private boolean splashShown;
+    private AppSkin currentSkin = AppSkin.DARK;
     private MediaPlayer previewPlayer;
     private volatile boolean activityActive = true;
     private ScrollView dragScrollView;
@@ -342,7 +352,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        if (readSavedSkin() == AppSkin.DARK) {
+        if (readSavedSkin() == AppSkin.LIGHT) {
+            setTheme(R.style.Theme_AVTOHIT_Light);
+        } else {
             setTheme(R.style.Theme_AVTOHIT_Dark);
         }
         super.onCreate(savedInstanceState);
@@ -363,6 +375,7 @@ public final class MainActivity extends Activity {
         applySkin();
         bindActions();
         refreshUi();
+        showStartupSplashIfNeeded(savedInstanceState);
     }
 
     @Override
@@ -378,6 +391,7 @@ public final class MainActivity extends Activity {
         mainHandler.removeCallbacksAndMessages(null);
         releasePreviewPlayer();
         executor.shutdown();
+        thumbnailExecutor.shutdownNow();
         super.onDestroy();
     }
 
@@ -405,6 +419,7 @@ public final class MainActivity extends Activity {
         outState.putInt(STATE_SLIDE_SECONDS, slideSeconds);
         outState.putBoolean(STATE_AUTO_SPLIT_TIME, autoSplitTime);
         outState.putInt(STATE_VIDEO_REPEAT_COUNT, videoRepeatCount);
+        outState.putBoolean(STATE_SPLASH_SHOWN, splashShown);
     }
 
     @Override
@@ -459,6 +474,12 @@ public final class MainActivity extends Activity {
         status = findViewById(R.id.status);
         previewTitle = findViewById(R.id.previewTitle);
         headerBanner = findViewById(R.id.headerBanner);
+        themeToggleButton = findViewById(R.id.themeToggleButton);
+        loadedAudioRow = findViewById(R.id.loadedAudioRow);
+        clearAudioButton = findViewById(R.id.clearAudioButton);
+        startupSplashOverlay = findViewById(R.id.startupSplashOverlay);
+        splashSubtitleView = findViewById(R.id.splashSubtitleView);
+        splashVersionView = findViewById(R.id.splashVersionView);
         playButton = findViewById(R.id.playButton);
         previewSeek = findViewById(R.id.previewSeek);
         exportButton = findViewById(R.id.exportButton);
@@ -498,6 +519,16 @@ public final class MainActivity extends Activity {
         helpButton.setOnClickListener(view -> showHelpDialog());
         skinButton.setOnClickListener(view -> showSkinDialog());
         aboutButton.setOnClickListener(view -> showAboutDialog());
+        if (themeToggleButton != null) {
+            themeToggleButton.setOnClickListener(view -> toggleSkinQuick());
+        }
+        if (clearAudioButton != null) {
+            clearAudioButton.setOnClickListener(view -> {
+                clearAudioSelection();
+                status.setText(R.string.audio_removed);
+                refreshUi();
+            });
+        }
 
         previewSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -545,6 +576,61 @@ public final class MainActivity extends Activity {
         slideSeconds = clampSlideSeconds(savedInstanceState.getInt(STATE_SLIDE_SECONDS, 0));
         autoSplitTime = savedInstanceState.getBoolean(STATE_AUTO_SPLIT_TIME, false);
         videoRepeatCount = clampVideoRepeatCount(savedInstanceState.getInt(STATE_VIDEO_REPEAT_COUNT, 1));
+        splashShown = savedInstanceState.getBoolean(STATE_SPLASH_SHOWN, false);
+    }
+
+    private void showStartupSplashIfNeeded(Bundle savedInstanceState) {
+        if (startupSplashOverlay == null) {
+            return;
+        }
+        if (savedInstanceState != null || splashShown) {
+            startupSplashOverlay.setVisibility(View.GONE);
+            return;
+        }
+        splashShown = true;
+        styleStartupSplashOverlay();
+        startupSplashOverlay.setAlpha(1f);
+        startupSplashOverlay.setVisibility(View.VISIBLE);
+        startupSplashOverlay.setOnClickListener(v -> dismissStartupSplash());
+        mainHandler.postDelayed(this::dismissStartupSplash, 480L);
+    }
+
+    private void dismissStartupSplash() {
+        if (startupSplashOverlay == null || startupSplashOverlay.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        startupSplashOverlay.animate()
+                .alpha(0f)
+                .setDuration(220L)
+                .withEndAction(() -> {
+                    if (startupSplashOverlay != null) {
+                        startupSplashOverlay.setVisibility(View.GONE);
+                        startupSplashOverlay.setAlpha(1f);
+                    }
+                })
+                .start();
+    }
+
+    private void styleStartupSplashOverlay() {
+        if (startupSplashOverlay == null) {
+            return;
+        }
+        startupSplashOverlay.setBackgroundColor(currentSkin.backgroundColor);
+        if (splashSubtitleView != null) {
+            splashSubtitleView.setTextColor(currentSkin.mutedColor);
+        }
+        if (splashVersionView != null) {
+            splashVersionView.setText("v" + aboutVersionSummary());
+            splashVersionView.setTextColor(readyColor());
+        }
+    }
+
+    private void toggleSkinQuick() {
+        currentSkin = currentSkin == AppSkin.DARK ? AppSkin.LIGHT : AppSkin.DARK;
+        saveSkin(currentSkin);
+        applySkin();
+        status.setText(getString(R.string.skin_status_saved, currentSkin.label));
+        refreshUi();
     }
 
     private void restoreVisualImageState(Bundle savedInstanceState) {
@@ -736,6 +822,7 @@ public final class MainActivity extends Activity {
         visualIsVideo = false;
         visualDurationMs = 0L;
         status.setText(R.string.ready);
+        dismissStartupSplash();
     }
 
     private void handleVideoSequenceSelection(List<VideoSelection> videoSelections) {
@@ -759,6 +846,7 @@ public final class MainActivity extends Activity {
         visualIsVideo = true;
         visualDurationMs = totalDurationMs;
         status.setText(R.string.ready);
+        dismissStartupSplash();
     }
 
     private void handleSingleVisualSelection(Uri uri) {
@@ -793,6 +881,7 @@ public final class MainActivity extends Activity {
             visualVideoSoundEffects.add(new ArrayList<>());
         }
         status.setText(R.string.ready);
+        dismissStartupSplash();
     }
 
     private void showVisualOrderDialog() {
@@ -936,7 +1025,7 @@ public final class MainActivity extends Activity {
             dragHandle.setContentDescription(getString(R.string.visual_order_drag_item, i + 1));
             duplicateButton.setContentDescription(getString(R.string.visual_order_duplicate_item, i + 1));
             removeButton.setContentDescription(getString(R.string.visual_order_remove_item, i + 1));
-            removeButton.setEnabled(items.size() > 1);
+            removeButton.setEnabled(commitOnChange || items.size() > 1);
 
             styleVisualOrderRow(row);
             bindVisualOrderThumbnail(typeIcon, item);
@@ -964,7 +1053,7 @@ public final class MainActivity extends Activity {
                 handleVisualOrderListChanged(listContainer, items, commitOnChange);
             });
             removeButton.setOnClickListener(view -> {
-                if (items.size() <= 1) {
+                if (!commitOnChange && items.size() <= 1) {
                     return;
                 }
                 items.remove(item);
@@ -1388,6 +1477,8 @@ public final class MainActivity extends Activity {
 
     private void applyVisualOrderItems(List<VisualOrderItem> items) {
         if (items == null || items.isEmpty()) {
+            clearVisualSelection();
+            status.setText(R.string.project_cleared);
             return;
         }
         boolean video = items.get(0).video;
@@ -1806,12 +1897,20 @@ public final class MainActivity extends Activity {
         mediaListEmptyState.setTextColor(currentSkin.mutedColor);
 
         TextView audioSummary = findViewById(R.id.loadedAudioSummary);
-        audioSummary.setVisibility(audioUri != null ? View.VISIBLE : View.GONE);
+        if (loadedAudioRow != null) {
+            loadedAudioRow.setVisibility(audioUri != null ? View.VISIBLE : View.GONE);
+        } else {
+            audioSummary.setVisibility(audioUri != null ? View.VISIBLE : View.GONE);
+        }
         audioSummary.setText(getString(R.string.loaded_audio_summary,
                 firstNonBlank(audioDisplayName, "MP3"), formatDuration(audioDurationMs)));
         audioSummary.setTextColor(currentSkin.textColor);
         audioSummary.setEnabled(!rendering);
         audioSummary.setOnClickListener(view -> openAudioPicker());
+        if (clearAudioButton != null) {
+            clearAudioButton.setEnabled(!rendering);
+            styleVisualOrderIconButton(clearAudioButton, neededColor());
+        }
 
         ArrayList<VisualOrderItem> items = currentVisualOrderItems();
         if (items.isEmpty()) {
@@ -2052,6 +2151,9 @@ public final class MainActivity extends Activity {
         exportSummaryRow.setEnabled(canOpenMergeMenu);
         setViewTreeEnabled(mediaInlineList, !rendering);
         findViewById(R.id.loadedAudioSummary).setEnabled(!rendering);
+        if (clearAudioButton != null) {
+            clearAudioButton.setEnabled(!rendering);
+        }
         helpButton.setEnabled(true);
         skinButton.setEnabled(true);
         aboutButton.setEnabled(true);
@@ -2483,16 +2585,44 @@ public final class MainActivity extends Activity {
     }
 
     private void bindVisualOrderThumbnail(ImageView thumbnailView, VisualOrderItem item) {
-        Bitmap thumbnail = loadVisualOrderThumbnail(item);
-        if (thumbnail != null) {
+        if (item == null || item.uri == null) {
+            showPlaceholderThumbnail(thumbnailView, item != null && item.video);
+            return;
+        }
+        String cacheKey = item.uri.toString();
+        Bitmap cached = thumbnailCache.get(cacheKey);
+        if (cached != null && !cached.isRecycled()) {
+            thumbnailView.setTag(cacheKey);
             thumbnailView.setPadding(0, 0, 0, 0);
             thumbnailView.clearColorFilter();
-            thumbnailView.setImageBitmap(thumbnail);
+            thumbnailView.setImageBitmap(cached);
             return;
         }
 
+        showPlaceholderThumbnail(thumbnailView, item.video);
+        thumbnailView.setTag(cacheKey);
+        try {
+            thumbnailExecutor.submit(() -> {
+                Bitmap decoded = loadVisualOrderThumbnail(item);
+                if (decoded != null) {
+                    thumbnailCache.put(cacheKey, decoded);
+                    postToUiIfAlive(() -> {
+                        if (cacheKey.equals(thumbnailView.getTag())) {
+                            thumbnailView.setPadding(0, 0, 0, 0);
+                            thumbnailView.clearColorFilter();
+                            thumbnailView.setImageBitmap(decoded);
+                        }
+                    });
+                }
+            });
+        } catch (RejectedExecutionException ignored) {
+            // Shutdown in progress.
+        }
+    }
+
+    private void showPlaceholderThumbnail(ImageView thumbnailView, boolean video) {
         thumbnailView.setPadding(dp(10), dp(10), dp(10), dp(10));
-        thumbnailView.setImageResource(item.video ? R.drawable.ic_film : R.drawable.ic_image);
+        thumbnailView.setImageResource(video ? R.drawable.ic_film : R.drawable.ic_image);
         thumbnailView.setColorFilter(readyColor());
     }
 
@@ -2996,7 +3126,7 @@ public final class MainActivity extends Activity {
     }
 
     private AppSkin readSavedSkin() {
-        String skinKey = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_SKIN, AppSkin.LIGHT.key);
+        String skinKey = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_SKIN, AppSkin.DARK.key);
         return AppSkin.fromKey(skinKey);
     }
 
@@ -3013,6 +3143,8 @@ public final class MainActivity extends Activity {
         rootContainer.setBackgroundColor(currentSkin.backgroundColor);
         bottomActionsBar.setBackgroundColor(currentSkin.backgroundColor);
         styleHeaderBanner();
+        styleThemeToggleButton();
+        styleStartupSplashOverlay();
 
         styleCard(projectSummaryCard, currentSkin.surfaceColor);
         styleCard(previewCard, currentSkin.surfaceColor);
@@ -3045,18 +3177,16 @@ public final class MainActivity extends Activity {
         if (headerBanner == null) {
             return;
         }
-        if (currentSkin != AppSkin.DARK) {
-            headerBanner.clearColorFilter();
+        headerBanner.clearColorFilter();
+    }
+
+    private void styleThemeToggleButton() {
+        if (themeToggleButton == null) {
             return;
         }
-
-        ColorMatrix invertColors = new ColorMatrix(new float[]{
-                -1f, 0f, 0f, 0f, 255f,
-                0f, -1f, 0f, 0f, 255f,
-                0f, 0f, -1f, 0f, 255f,
-                0f, 0f, 0f, 1f, 0f
-        });
-        headerBanner.setColorFilter(new ColorMatrixColorFilter(invertColors));
+        themeToggleButton.setImageResource(currentSkin == AppSkin.DARK ? R.drawable.ic_sun : R.drawable.ic_moon);
+        int iconTint = currentSkin == AppSkin.DARK ? 0xFFF4C563 : 0xFF12664F;
+        styleVisualOrderIconButton(themeToggleButton, iconTint);
     }
 
     private void styleCard(View view, int fillColor) {

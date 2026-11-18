@@ -1092,10 +1092,7 @@ public final class AvtohitProcessor {
         args.add("1:a:0");
         args.add("-vf");
         args.add(buildScalePadFilter(exportProfile, frameRate));
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-c:a");
         args.add("copy");
         args.add("-shortest");
@@ -1128,10 +1125,7 @@ public final class AvtohitProcessor {
         args.add("1:a:0");
         args.add("-vf");
         args.add(buildScalePadFilter(exportProfile, frameRate));
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-c:a");
         args.add("copy");
         args.add("-shortest");
@@ -1159,10 +1153,7 @@ public final class AvtohitProcessor {
         args.add(imageFile.getAbsolutePath());
         args.add("-vf");
         args.add(buildScalePadFilter(exportProfile, frameRate));
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-an");
         args.add("-movflags");
         args.add("+faststart");
@@ -1184,10 +1175,7 @@ public final class AvtohitProcessor {
         args.add("[0:v:0]setpts=PTS-STARTPTS[v0];[1:v:0]setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]");
         args.add("-map");
         args.add("[v]");
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-an");
         args.add("-movflags");
         args.add("+faststart");
@@ -1250,10 +1238,7 @@ public final class AvtohitProcessor {
         args.add("[v]");
         args.add("-map");
         args.add("[a]");
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-c:a");
         args.add("aac");
         args.add("-b:a");
@@ -1286,10 +1271,7 @@ public final class AvtohitProcessor {
         args.add("0:v:0");
         args.add("-map");
         args.add("0:a?");
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-c:a");
         args.add("aac");
         args.add("-b:a");
@@ -1370,10 +1352,7 @@ public final class AvtohitProcessor {
         args.add("[a]");
         args.add("-t");
         args.add(formatSeconds(durationMs));
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-c:a");
         args.add("aac");
         args.add("-b:a");
@@ -1440,10 +1419,7 @@ public final class AvtohitProcessor {
         args.add(filter.toString());
         args.add("-map");
         args.add("[v]");
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-an");
         args.add("-movflags");
         args.add("+faststart");
@@ -1469,10 +1445,7 @@ public final class AvtohitProcessor {
         args.add(imageFile.getAbsolutePath());
         args.add("-vf");
         args.add(buildScalePadFilter(exportProfile, frameRate));
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-an");
         args.add("-movflags");
         args.add("+faststart");
@@ -1520,10 +1493,7 @@ public final class AvtohitProcessor {
         args.add(filter.toString());
         args.add("-map");
         args.add("[v]");
-        args.add("-c:v");
-        args.add("mpeg4");
-        args.add("-q:v");
-        args.add("3");
+        appendVideoCodecArgs(args);
         args.add("-an");
         args.add("-movflags");
         args.add("+faststart");
@@ -1575,6 +1545,55 @@ public final class AvtohitProcessor {
         args.add("+faststart");
         args.add(outputFile.getAbsolutePath());
         return args;
+    }
+
+    private static volatile String cachedPreferredVideoEncoder;
+
+    private static String preferredVideoEncoder() {
+        String cached = cachedPreferredVideoEncoder;
+        if (cached != null) {
+            return cached;
+        }
+        String resolved = "mpeg4";
+        try {
+            FFmpegSession session = FFmpegKit.execute("-hide_banner -encoders");
+            if (session != null && ReturnCode.isSuccess(session.getReturnCode())) {
+                String out = session.getOutput();
+                if (out != null) {
+                    if (out.contains(" libx264 ")) {
+                        resolved = "libx264";
+                    } else if (out.contains(" libopenh264 ")) {
+                        resolved = "libopenh264";
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // Fall back to mpeg4 when FFmpeg native libraries are not loaded (e.g. unit tests) or query fails.
+        }
+        cachedPreferredVideoEncoder = resolved;
+        return resolved;
+    }
+
+    private static void appendVideoCodecArgs(List<String> args) {
+        String encoder = preferredVideoEncoder();
+        args.add("-c:v");
+        args.add(encoder);
+        if ("libx264".equals(encoder)) {
+            args.add("-preset");
+            args.add("veryfast");
+            args.add("-crf");
+            args.add("20");
+            args.add("-pix_fmt");
+            args.add("yuv420p");
+        } else if ("libopenh264".equals(encoder)) {
+            args.add("-b:v");
+            args.add("4M");
+            args.add("-pix_fmt");
+            args.add("yuv420p");
+        } else {
+            args.add("-q:v");
+            args.add("3");
+        }
     }
 
     private static List<String> baseArgs() {

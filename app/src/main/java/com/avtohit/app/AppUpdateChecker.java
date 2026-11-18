@@ -135,17 +135,34 @@ public final class AppUpdateChecker {
             String assetName = "";
             JSONArray assets = release.optJSONArray("assets");
             if (assets != null) {
+                String preferredAbi = (Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0)
+                        ? Build.SUPPORTED_ABIS[0].toLowerCase(Locale.US)
+                        : "arm64-v8a";
+                String fallbackName = "";
+                String fallbackUrl = "";
                 for (int index = 0; index < assets.length(); index++) {
                     JSONObject asset = assets.optJSONObject(index);
                     if (asset == null) {
                         continue;
                     }
                     String name = asset.optString("name", "");
-                    if (name.toLowerCase(Locale.US).endsWith(".apk")) {
-                        assetName = name;
-                        downloadUrl = asset.optString("browser_download_url", releaseUrl);
-                        break;
+                    String lowerName = name.toLowerCase(Locale.US);
+                    if (lowerName.endsWith(".apk")) {
+                        String url = asset.optString("browser_download_url", releaseUrl);
+                        if (fallbackName.isEmpty()) {
+                            fallbackName = name;
+                            fallbackUrl = url;
+                        }
+                        if (lowerName.contains(preferredAbi)) {
+                            assetName = name;
+                            downloadUrl = url;
+                            break;
+                        }
                     }
+                }
+                if (assetName.isEmpty() && !fallbackName.isEmpty()) {
+                    assetName = fallbackName;
+                    downloadUrl = fallbackUrl;
                 }
             }
             if (downloadUrl.isEmpty() || !isNewer(tag, assetName)) {

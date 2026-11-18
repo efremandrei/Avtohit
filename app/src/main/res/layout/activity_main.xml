@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/appRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black"
-    android:orientation="vertical">
+    android:background="@android:color/black">
+
+    <LinearLayout
+        android:id="@+id/mainContentColumn"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
     <View
         android:id="@+id/statusBarSpacer"
@@ -30,14 +35,35 @@
                 android:paddingRight="10dp"
                 android:paddingBottom="16dp">
 
-            <ImageView
-                android:id="@+id/headerBanner"
+            <LinearLayout
+                android:id="@+id/topHeaderBar"
                 android:layout_width="match_parent"
-                android:layout_height="88dp"
-                android:adjustViewBounds="false"
-                android:contentDescription="@string/app_name"
-                android:scaleType="fitCenter"
-                android:src="@drawable/avtohit_header_banner" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/headerBanner"
+                    android:layout_width="0dp"
+                    android:layout_height="76dp"
+                    android:layout_weight="1"
+                    android:adjustViewBounds="false"
+                    android:contentDescription="@string/app_name"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/avtohit_header_logo" />
+
+                <ImageButton
+                    android:id="@+id/themeToggleButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_icon_button"
+                    android:contentDescription="@string/toggle_theme"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_sun" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -182,19 +208,40 @@
                     android:layout_marginTop="12dp"
                     android:orientation="vertical" />
 
-                <TextView
-                    android:id="@+id/loadedAudioSummary"
+                <LinearLayout
+                    android:id="@+id/loadedAudioRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:breakStrategy="simple"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:minHeight="48dp"
-                    android:padding="8dp"
-                    android:textSize="14sp"
-                    android:visibility="gone" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/loadedAudioSummary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:breakStrategy="simple"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:minHeight="48dp"
+                        android:padding="8dp"
+                        android:textSize="14sp" />
+
+                    <ImageButton
+                        android:id="@+id/clearAudioButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/bg_icon_button"
+                        android:contentDescription="@string/clear_audio"
+                        android:padding="10dp"
+                        android:scaleType="center"
+                        android:src="@drawable/ic_trash"
+                        android:tint="@color/avtohit_negative" />
+                </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -666,4 +713,55 @@
             android:textSize="13sp"
             android:textStyle="normal" />
     </LinearLayout>
-</LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/startupSplashOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#111615"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/splashIconView"
+            android:layout_width="136dp"
+            android:layout_height="136dp"
+            android:contentDescription="@string/app_name"
+            android:scaleType="fitCenter"
+            android:src="@mipmap/ic_launcher_round" />
+
+        <ImageView
+            android:id="@+id/splashWordmarkView"
+            android:layout_width="240dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="16dp"
+            android:contentDescription="@string/app_name"
+            android:scaleType="fitCenter"
+            android:src="@drawable/avtohit_header_logo" />
+
+        <TextView
+            android:id="@+id/splashSubtitleView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/splash_subtitle"
+            android:textColor="#B8C5BE"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/splashVersionView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textColor="#74D7B5"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

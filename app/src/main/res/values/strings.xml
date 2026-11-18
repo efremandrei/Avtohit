@@ -143,6 +143,10 @@
     <string name="debug_log_read_failed">Could not read the debug log: %1$s\nLocation: %2$s</string>
     <string name="app_skin_light">Light</string>
     <string name="app_skin_dark">Dark</string>
+    <string name="toggle_theme">Switch dark and light theme</string>
+    <string name="clear_audio">Remove MP3 audio</string>
+    <string name="audio_removed">MP3 audio removed</string>
+    <string name="splash_subtitle">Audio + Visual Video Studio</string>
     <string name="export_apply">Save Settings</string>
     <string name="export_start">Export</string>
     <string name="export_cancel">Cancel</string>
