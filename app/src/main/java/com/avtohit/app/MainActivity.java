@@ -71,6 +71,7 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_AUDIO = 1001;
     private static final int REQUEST_VISUAL = 1002;
     private static final int REQUEST_OUTPUT = 1003;
+    private static final int REQUEST_POST_NOTIFICATIONS = 1004;
     private static final String PREFS_NAME = "avtohit_settings";
     private static final String PREF_SKIN = "app_skin";
     private static final String STATE_AUDIO_URI = "audio_uri";
@@ -349,6 +350,7 @@ public final class MainActivity extends Activity {
             }
         }
     };
+    private final AvtohitMergeService.Listener mergeServiceListener = this::onMergeServiceStateChanged;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -376,6 +378,13 @@ public final class MainActivity extends Activity {
         bindActions();
         refreshUi();
         showStartupSplashIfNeeded(savedInstanceState);
+        AvtohitMergeService.addListener(mergeServiceListener);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        AvtohitMergeService.addListener(mergeServiceListener);
     }
 
     @Override
@@ -388,6 +397,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         activityActive = false;
+        AvtohitMergeService.removeListener(mergeServiceListener);
         mainHandler.removeCallbacksAndMessages(null);
         releasePreviewPlayer();
         executor.shutdown();
@@ -1606,145 +1616,78 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        requestNotificationPermissionIfNeeded();
         setRendering(true);
         releasePreviewPlayer();
         status.setText(R.string.creating);
         progress.setProgress(0);
 
-        // Render settings are snapshotted here so a dialog change cannot mutate an in-flight job.
-        Uri selectedAudio = audioUri;
-        Uri selectedVisual = visualUri;
-        String selectedVisualMime = visualMimeType;
-        ArrayList<Uri> selectedImageUris = new ArrayList<>(visualImageUris);
-        ArrayList<Uri> selectedVideoUris = new ArrayList<>(visualVideoUris);
-        boolean selectedVisualIsVideo = visualIsVideo;
-        ExportProfile selectedProfile = exportProfile;
-        int selectedFrameRate = frameRate;
-        long selectedAudioDurationMs = audioDurationMs;
-        long selectedVisualDurationMs = visualDurationMs;
-        int selectedSlideSeconds = slideSeconds;
-        boolean selectedAutoSplitTime = autoSplitTime;
-        int selectedVideoRepeatCount = videoRepeatCount;
-        String selectedAudioName = audioDisplayName;
-        String selectedVisualName = visualDisplayName;
-        ArrayList<String> selectedImageNames = new ArrayList<>(visualImageNames);
-        ArrayList<Integer> selectedImageSeconds = new ArrayList<>(visualImageSeconds);
-        ArrayList<String> selectedVideoNames = new ArrayList<>(visualVideoNames);
-        ArrayList<Long> selectedVideoEpochs = new ArrayList<>(visualVideoEpochs);
-        ArrayList<Long> selectedVideoDurations = new ArrayList<>(visualVideoDurations);
-        ArrayList<ArrayList<VideoSoundEffect>> selectedVideoSoundEffects = copySoundEffectLists(visualVideoSoundEffects);
-        AvtohitDebugLogger selectedLogger = debugLogger != null ? debugLogger : new AvtohitDebugLogger(this);
+        // Snapshot render settings and hand off execution to the foreground service so merging continues in the background.
+        AvtohitMergeService.MergeRequest request = new AvtohitMergeService.MergeRequest(
+                audioUri,
+                audioDisplayName,
+                visualUri,
+                visualMimeType,
+                visualDisplayName,
+                visualIsVideo,
+                new ArrayList<>(visualImageUris),
+                new ArrayList<>(visualImageNames),
+                new ArrayList<>(visualImageSeconds),
+                new ArrayList<>(visualVideoUris),
+                new ArrayList<>(visualVideoNames),
+                new ArrayList<>(visualVideoEpochs),
+                new ArrayList<>(visualVideoDurations),
+                copySoundEffectLists(visualVideoSoundEffects),
+                destinationUri,
+                exportProfile,
+                frameRate,
+                audioDurationMs,
+                visualDurationMs,
+                slideSeconds,
+                autoSplitTime,
+                videoRepeatCount
+        );
 
-        try {
-            executor.submit(() -> {
-                try {
-                    selectedLogger.startRun("AVTOHIT merge");
-                    logRenderInputs(
-                            selectedLogger,
-                            selectedAudio,
-                            selectedAudioName,
-                            selectedVisual,
-                            selectedVisualMime,
-                            selectedVisualName,
-                            selectedVisualIsVideo,
-                            selectedImageUris,
-                            selectedImageNames,
-                            selectedVideoUris,
-                            selectedVideoNames,
-                            selectedVideoEpochs,
-                            selectedVideoDurations,
-                            selectedVideoSoundEffects,
-                            destinationUri,
-                            selectedProfile,
-                            selectedFrameRate,
-                            selectedAudioDurationMs,
-                            selectedVisualDurationMs,
-                            selectedSlideSeconds,
-                            selectedAutoSplitTime,
-                            selectedVideoRepeatCount
-                    );
-                    AvtohitProcessor.Result result;
-                    if (selectedAudio == null && !selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
-                        result = processor.renderImagesSilent(
-                                getApplicationContext(),
-                                selectedImageUris,
-                                destinationUri,
-                                selectedProfile,
-                                selectedFrameRate,
-                                selectedSlideSeconds,
-                                selectedImageSeconds,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
-                                selectedLogger
-                        );
-                    } else if (selectedAudio == null && selectedVisualIsVideo && selectedVideoUris.size() == 1) {
-                        result = processor.renderVideoRepeated(
-                                getApplicationContext(),
-                                selectedVideoUris.get(0),
-                                destinationUri,
-                                selectedProfile,
-                                selectedFrameRate,
-                                selectedVisualDurationMs,
-                                selectedVideoRepeatCount,
-                                selectedVideoSoundEffects.isEmpty() ? null : selectedVideoSoundEffects.get(0),
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
-                                selectedLogger
-                        );
-                    } else if (selectedAudio == null && selectedVideoUris.size() > 1) {
-                        result = processor.renderVideos(
-                                getApplicationContext(),
-                                selectedVideoUris,
-                                destinationUri,
-                                selectedProfile,
-                                selectedFrameRate,
-                                selectedVideoDurations,
-                                selectedVideoSoundEffects,
-                                selectedVisualDurationMs,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
-                                selectedLogger
-                        );
-                    } else if (!selectedVisualIsVideo && !selectedImageUris.isEmpty()) {
-                        result = processor.renderImages(
-                                getApplicationContext(),
-                                selectedAudio,
-                                selectedImageUris,
-                                destinationUri,
-                                selectedProfile,
-                                selectedFrameRate,
-                                selectedAudioDurationMs,
-                                selectedSlideSeconds,
-                                selectedAutoSplitTime,
-                                selectedImageSeconds,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
-                                selectedLogger
-                        );
-                    } else {
-                        result = processor.render(
-                                getApplicationContext(),
-                                selectedAudio,
-                                selectedVisual,
-                                selectedVisualMime,
-                                destinationUri,
-                                selectedProfile,
-                                selectedFrameRate,
-                                selectedAudioDurationMs,
-                                (currentMs, totalMs) -> postToUiIfAlive(() -> updateRenderProgress(currentMs, totalMs)),
-                                selectedLogger
-                        );
-                    }
-                    selectedLogger.append("render_success outputBytes=" + result.outputBytes
-                            + " visualKind=" + result.visualKind
-                            + " videoReencoded=" + result.videoReencoded
-                            + " usesImportedMp3=" + result.usesImportedMp3);
-                    postToUiIfAlive(() -> onRenderSuccess(result));
-                } catch (IOException | AvtohitException | RuntimeException error) {
-                    selectedLogger.append(error);
-                    postToUiIfAlive(() -> onRenderFailure(error));
-                }
-            });
-        } catch (RejectedExecutionException error) {
-            selectedLogger.append(error);
+        if (!AvtohitMergeService.startMerge(this, request)) {
             setRendering(false);
             status.setText(R.string.render_unavailable);
+        }
+    }
+
+    private void onMergeServiceStateChanged(AvtohitMergeService.MergeState state) {
+        if (state == null || !activityActive || isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && isDestroyed())) {
+            return;
+        }
+        if (state.running) {
+            if (!rendering) {
+                setRendering(true);
+            }
+            updateRenderProgress(state.progressScaled, 1000L);
+            if (state.progressScaled <= 0) {
+                status.setText(R.string.creating);
+            }
+            return;
+        }
+        if (state.lastResult != null) {
+            AvtohitMergeService.clearCompletedState();
+            onRenderSuccess(state.lastResult);
+        } else if (state.lastError != null) {
+            AvtohitMergeService.clearCompletedState();
+            onRenderFailure(state.lastError);
+        } else if (rendering) {
+            setRendering(false);
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            try {
+                if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_POST_NOTIFICATIONS);
+                }
+            } catch (RuntimeException ignored) {
+                // Ignore if permission request is unavailable during instrumentation.
+            }
         }
     }
 
