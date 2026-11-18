@@ -85,7 +85,7 @@ jobs:
         run: |
           mkdir -p release
           repo_name="${GITHUB_REPOSITORY#*/}"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          for abi in arm64-v8a; do
             apk_path="app/build/outputs/apk/debug/app-${abi}-debug.apk"
             test -f "$apk_path"
             cp "$apk_path" "release/${repo_name}-v${APP_VERSION}-build-${APP_BUILD}-${abi}-debug.apk"
